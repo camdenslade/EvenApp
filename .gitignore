@@ -38,3 +38,4 @@ yarn-error.*
 
 # generated native folders
 /src/hooks/firebase.ts
+src/hooks/firebase.ts
