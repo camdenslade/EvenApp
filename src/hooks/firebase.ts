@@ -1,7 +1,7 @@
 // app/firebase.ts
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getAnalytics } from "firebase/analytics";
+import { initializeAuth, getReactNativePersistence } from "firebase/auth";
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDo4FTcf9Pe_CqqgNLk7P85YoHOW6HcqDw",
@@ -9,10 +9,11 @@ const firebaseConfig = {
   projectId: "even-dating",
   storageBucket: "even-dating.firebasestorage.app",
   messagingSenderId: "801278672018",
-  appId: "1:801278672018:web:9007af16b2f8413b3efa4b",
-  measurementId: "G-Y98TVSNK5G"
+  appId: "1:801278672018:web:0b6a77bf679ad2c13efa4b",
+  measurementId: "G-4XSXXK475F"
 };
 
 export const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const analytics = getAnalytics(app);
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(ReactNativeAsyncStorage)
+});

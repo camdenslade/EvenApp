@@ -24,6 +24,10 @@ export async function apiRequest<T>(
       headers,
     });
 
+    if (res.status === 403) {
+      throw new Error('Profile setup incomplete!');
+    }
+
     if (res.status === 204) return null;
     if (!res.ok) {
       console.error(`API error ${res.status}: ${endpoint}`);
@@ -34,7 +38,7 @@ export async function apiRequest<T>(
     return data;
   } catch (error) {
     console.error("apiRequest error:", error);
-    return null;
+    throw error;
   }
 }
 

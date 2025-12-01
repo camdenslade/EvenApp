@@ -37,4 +37,13 @@ yarn-error.*
 *.tsbuildinfo
 
 # generated native folders
-/src/hooks/firebase.ts
+.env
+firebase.json
+firestore.rules
+firestore.indexes.json
+.firebaserc
+eas.json
+app.json
+src/hooks/firebase.ts
+backend/serviceAccountKey.json
+firebase.ts

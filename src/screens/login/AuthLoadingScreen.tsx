@@ -11,33 +11,49 @@ export default function AuthLoadingScreen(): React.ReactElement {
     async function check() {
       try {
         const access = await getAccessToken();
-        if (access) {
-          navigation.reset({ index: 0, routes: [{ name: "Swipe" }] });
-          return;
-        }
 
         const refresh = await getRefreshToken();
-        if (refresh) {
-          const tokens = await apiPost<{ access: string; refresh: string }>(
-            "/auth/refresh",
-            { refreshToken: refresh }
-          );
+        let tokens: { access: string; refresh: string } | null = null;
+
+        if (access || refresh) {
+          if (refresh) {
+            tokens = await apiPost<{ access: string; refresh: string }>(
+              "/auth/refresh",
+              { refreshToken: refresh }
+            );
+          }
 
           if (tokens) {
             await saveTokens(tokens.access, tokens.refresh);
+          }
+
+          const profileStatus = await apiPost<{ profileComplete: boolean }>(
+            "/profiles/status",
+            {}
+          );
+
+          if (profileStatus) {
             navigation.reset({ index: 0, routes: [{ name: "Swipe" }] });
             return;
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Auth check failed:", error);
+
+        if (error instanceof Error && error.message === "Profile setup required") {
+          navigation.reset({ index: 0, routes: [{ name: "Onboarding" }] });
+          return;
+        }
+
         Alert.alert("Error", "Could not complete authentication check.");
       }
+
       navigation.reset({ index: 0, routes: [{ name: "Login" }] });
     }
 
     check();
   }, []);
+
 
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "black" }}>

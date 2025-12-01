@@ -2,118 +2,253 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  TextInput,
-  Button,
   TouchableOpacity,
   StyleSheet,
   Alert,
+  Image,
+  Platform,
 } from "react-native";
-import { signInWithEmailAndPassword, AuthError } from "firebase/auth";
-import { auth } from "../../hooks/firebase";
-import { apiPost } from "../../services/apiService";
-import { saveTokens } from "../../services/authStorage";
 import { useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 
-interface TokenResponse {
-  access: string;
-  refresh: string;
-  isNewUser: boolean;
-}
+const APP_LOGO = require('../../../assets/images/Even-App-Logos/TransparentBG/EE-SolidWhite.png');
+
+const SocialButton = ({
+  iconName,
+  title,
+  onPress,
+  iconColor,
+  backgroundColor,
+  textColor
+}: {
+  iconName: keyof typeof Ionicons.glyphMap;
+  title: string;
+  onPress: () => void;
+  iconColor: string;
+  backgroundColor: string;
+  textColor: string;
+}) => (
+  <TouchableOpacity
+    style={[styles.socialButton, { backgroundColor: backgroundColor }]}
+    onPress={onPress}
+  >
+    <Ionicons name={iconName} size={24} color={iconColor} style={styles.socialIcon} />
+    <Text style={[styles.socialText, { color: textColor }]}>{title}</Text>
+  </TouchableOpacity>
+);
+
+const PrimaryActionButton = ({ title, onPress, inverted = false }: { title: string, onPress: () => void, inverted?: boolean }) => (
+  <TouchableOpacity
+    style={[styles.primaryButton, inverted ? styles.invertedButton : styles.defaultButton]}
+    onPress={onPress}
+  >
+    <Text style={[styles.primaryButtonText, inverted ? styles.invertedButtonText : styles.defaultButtonText]}>
+      {title}
+    </Text>
+  </TouchableOpacity>
+);
 
 export default function LoginScreen(): React.ReactElement {
   const navigation = useNavigation<any>();
+  const [showOptions, setShowOptions] = useState(false);
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const handleSocialLogin = (provider: string) => {
+    navigation.navigate("PhoneAuth", { provider: provider });
+  };
 
-  async function handleLogin(): Promise<void> {
-    try {
-      setError(null);
-      setLoading(true);
+  if (showOptions) {
+    return (
+      <View style={styles.container}>
+        <Image
+          source={APP_LOGO}
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
 
-      const userCred = await signInWithEmailAndPassword(auth, email, password);
-      const idToken = await userCred.user.getIdToken();
+        <Text style={styles.logoText}>Even Dating</Text>
 
-      const tokens = await apiPost<TokenResponse>("/auth/login", { idToken });
-      
-      if (!tokens) {
-        Alert.alert("Error", "Server failed to issue tokens. Try again later.");
-        return;
-      }
+        <View style={styles.policyTextWrapper}>
+          <Text style={styles.policyText}>
+            By tapping 'Sign in', you agree to our Terms. Learn how we process your
+            data in our Privacy Policy and Cookies Policy.
+          </Text>
+        </View>
 
-      await saveTokens(tokens.access, tokens.refresh);
+        {/*{Platform.OS === 'ios' && (
+          <SocialButton
+            iconName="logo-apple"
+            title="Sign in with Apple"
+            onPress={() => handleSocialLogin("Apple")}
+            iconColor="black"
+            backgroundColor="white"
+            textColor="black"
+          />
+        )}*/}
 
-      navigation.reset({
-        index: 0,
-        routes: [{ name: tokens.isNewUser ? "Onboarding" : "Swipe" }],
-      });
-    } catch (e) {
-      if (e instanceof Error && 'code' in e) {
-        switch (e.code) {
-          case 'auth/user-not-found':
-          case 'auth/wrong-password':
-          case 'auth/invalid-credential':
-            setError("Invalid email or password.");
-            break;
-          case 'auth/invalid-email':
-            setError("Invalid email format.");
-            break;
-          default:
-            setError(`Login failed: ${e.message}`);
-        }
-      } else if (e instanceof Error) {
-        setError(e.message);
-      } else {
-        setError("An unknown login error occurred.");
-      }
-    } finally {
-      setLoading(false);
-    }
+        <SocialButton
+          iconName="logo-google"
+          title="Sign in with Google"
+          onPress={() => handleSocialLogin("Google")}
+          iconColor="black"
+          backgroundColor="white"
+          textColor="black"
+        />
+
+        {/*<SocialButton
+          iconName="logo-facebook"
+          title="Sign in with Facebook"
+          onPress={() => handleSocialLogin("Facebook")}
+          iconColor="white"
+          backgroundColor="#3b5998"
+          textColor="white"
+        />*/}
+
+        <SocialButton
+          iconName="call"
+          title="Sign in with Phone Number"
+          onPress={() => handleSocialLogin("Phone")}
+          iconColor="black"
+          backgroundColor="white"
+          textColor="black"
+        />
+
+        <TouchableOpacity style={styles.troubleButton}>
+          <Text style={styles.troubleText}>Trouble signing in?</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => setShowOptions(false)} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={30} color="white" />
+        </TouchableOpacity>
+      </View>
+    );
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Even Dating</Text>
-
-      {error && <Text style={styles.error}>{error}</Text>}
-
-      <Text style={styles.label}>Email</Text>
-      <TextInput
-        style={styles.input}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
+      <Image
+        source={APP_LOGO}
+        style={styles.logoImage}
+        resizeMode="contain"
       />
 
-      <Text style={styles.label}>Password</Text>
-      <TextInput
-        style={styles.input}
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
+      <Text style={styles.logoText}>Even Dating</Text>
+
+      <View style={styles.policyTextWrapper}>
+        <Text style={styles.policyText}>
+          By tapping 'Create account' or 'Sign in', you agree to our Terms. Learn how we process your
+          data in our Privacy Policy and Cookies Policy.
+        </Text>
+      </View>
+
+      <PrimaryActionButton
+        title="Create Account"
+        onPress={() => handleSocialLogin("Phone")}
+        inverted={false}
       />
 
-      <Button 
-        title={loading ? "Loading..." : "Login"} 
-        onPress={handleLogin} 
-        disabled={loading}
+      <PrimaryActionButton
+        title="Sign In"
+        onPress={() => setShowOptions(true)}
+        inverted={true}
       />
 
-      <TouchableOpacity onPress={() => navigation.navigate("Onboarding")}>
-        <Text style={styles.newUser}>Create an account</Text>
+      <TouchableOpacity style={styles.troubleButton}>
+        <Text style={styles.troubleText}>Trouble signing in?</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, marginTop: 100 },
-  header: { fontSize: 32, color: "white", textAlign: "center", marginBottom: 30 },
-  label: { color: "white", marginBottom: 6 },
-  input: { backgroundColor: "white", padding: 10, borderRadius: 6, marginBottom: 18 },
-  error: { color: "red", marginBottom: 14 },
-  newUser: { marginTop: 20, color: "#3498db", textAlign: "center" },
+  container: {
+    flex: 1,
+    backgroundColor: "#222222",
+    padding: 30,
+    justifyContent: 'flex-end',
+    paddingBottom: 60,
+  },
+  logoImage: {
+    width: 250,
+    height: 80,
+    resizeMode: 'contain',
+    position: 'absolute',
+    top: 100,
+    alignSelf: 'center',
+  },
+  policyTextWrapper: {
+    marginBottom: 20,
+    paddingHorizontal: 15,
+  },
+  policyText: {
+    color: "#AAAAAA",
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  logoText: {
+    color: "white",
+    fontSize: 48,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    position: 'absolute',
+    alignSelf: 'center',
+    top: 200,
+  },
+  backButton: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    zIndex: 10,
+  },
+  primaryButton: {
+    height: 50,
+    borderRadius: 25,
+    marginBottom: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'white',
+  },
+  defaultButton: {
+    backgroundColor: 'white',
+  },
+  invertedButton: {
+    backgroundColor: 'transparent',
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  defaultButtonText: {
+    color: 'black',
+  },
+  invertedButtonText: {
+    color: 'white',
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 50,
+    borderRadius: 25,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'white',
+  },
+  socialIcon: {
+    marginRight: 10,
+  },
+  socialText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  troubleButton: {
+    marginTop: 15,
+  },
+  troubleText: {
+    color: 'white',
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '600',
+  }
 });

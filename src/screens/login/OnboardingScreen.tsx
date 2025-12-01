@@ -2,94 +2,120 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  TextInput,
-  Button,
   TouchableOpacity,
   Image,
-  ScrollView,
   StyleSheet,
-  Alert,
+  ScrollView,
+  TextInput,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
+import { Picker } from "@react-native-picker/picker";
 import { apiPost } from "../../services/apiService";
 import { useNavigation } from "@react-navigation/native";
 
-const sexes = ["male", "female"] as const;
-type Sex = typeof sexes[number];
+const interestsList = [
+  "Photography", "Shopping", "Karaoke", "Yoga", "Cooking",
+  "Tennis", "Run", "Swimming", "Art", "Traveling",
+  "Extreme", "Music", "Drink", "Video games",
+];
 
-const sexPreferences = ["male", "female", "everyone"] as const;
-type SexPreference = typeof sexPreferences[number];
-
-export default function OnboardingScreen(): React.ReactElement {
+export default function OnboardingScreen() {
   const navigation = useNavigation<any>();
 
-  const [name, setName] = useState("");
-  const [age, setAge] = useState("");
-  const [sex, setSex] = useState<Sex | null>(null);
-  const [interestedInSex, setInterestedInSex] =
-    useState<SexPreference | null>(null);
-  const [bio, setBio] = useState("");
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+
+  // -------------------------------
+  // BIRTHDAY PICKER (3 Wheels)
+  // -------------------------------
+  const months = [
+    "January","February","March","April","May","June",
+    "July","August","September","October","November","December"
+  ];
+
+  const days = Array.from({ length: 31 }, (_, i) => i + 1);
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 100 }, (_, i) => currentYear - i);
+
+  const [selectedMonth, setSelectedMonth] = useState(1);
+  const [selectedDay, setSelectedDay] = useState(1);
+  const [selectedYear, setSelectedYear] = useState(currentYear - 18);
+
+  const birthday = new Date(selectedYear, selectedMonth - 1, selectedDay);
+
+  const [gender, setGender] = useState<string | null>(null);
+  const [interests, setInterests] = useState<string[]>([]);
+
+  const [photos, setPhotos] = useState<(string | null)[]>([null, null, null, null, null, null]);
   const [error, setError] = useState<string | null>(null);
 
+  // -------------------------------
+  // IMAGE UPLOAD
+  // -------------------------------
   async function compress(uri: string): Promise<string> {
-    const resized = await manipulateAsync(
-      uri,
-      [{ resize: { width: 1080 } }],
-      { compress: 0.7, format: SaveFormat.JPEG }
-    );
+    const resized = await manipulateAsync(uri, [{ resize: { width: 1080 } }], {
+      compress: 0.7,
+      format: SaveFormat.JPEG,
+    });
     return resized.uri;
   }
 
-  async function pickPhotos(): Promise<void> {
+  async function pickPhoto(index: number) {
     const res = await ImagePicker.launchImageLibraryAsync({
-      allowsMultipleSelection: true,
-      selectionLimit: 5,
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 1,
     });
 
     if (res.canceled) return;
-    if (photos.length + res.assets.length > 5) {
-      setError("You may upload at most 5 photos.");
-      return;
-    }
 
-    const processed: string[] = [];
-    for (const asset of res.assets) {
-      processed.push(await compress(asset.uri));
-    }
-    setPhotos((prev) => [...prev, ...processed]);
+    const uri = await compress(res.assets[0].uri);
+
+    setPhotos((prev) => {
+      const updated = [...prev];
+      updated[index] = uri;
+      return updated;
+    });
   }
 
-  async function handleSubmit(): Promise<void> {
+  // -------------------------------
+  // INTERESTS
+  //-------------------------------
+  function toggleInterest(i: string) {
+    setInterests((prev) =>
+      prev.includes(i) ? prev.filter((p) => p !== i) : [...prev, i]
+    );
+  }
+
+  // -------------------------------
+  // SUBMIT PROFILE
+  //-------------------------------
+  async function handleSubmit() {
     setError(null);
 
-    if (!name || !age || !sex || !interestedInSex) {
-      setError("All fields are required.");
-      return;
-    }
-
-    if (photos.length < 3) {
-      setError("You must upload at least 3 photos.");
+    if (!firstName || !lastName || !gender) {
+      setError("Please complete all required fields.");
       return;
     }
 
     const uploadedUrls: string[] = [];
 
-    for (const localUri of photos) {
+    for (const uri of photos) {
+      if (!uri) continue;
+
       const signed = await apiPost<{ uploadUrl: string; fileUrl: string }>(
         "/profiles/upload-url",
         {}
       );
 
       if (!signed) {
-        setError("Failed to fetch upload URL.");
+        setError("Photo upload failed.");
         return;
       }
 
-      const blob = await (await fetch(localUri)).blob();
+      const blob = await (await fetch(uri)).blob();
 
       await fetch(signed.uploadUrl, {
         method: "PUT",
@@ -101,12 +127,13 @@ export default function OnboardingScreen(): React.ReactElement {
     }
 
     const result = await apiPost("/profiles/setup", {
-      name,
-      age: Number(age),
-      sex,
-      interestedInSex,
-      bio,
+      name: `${firstName} ${lastName}`.trim(),
+      age: currentYear - birthday.getFullYear(),
+      sex: gender,
+      interestedInSex: gender === "Man" ? "female" : "male",
+      bio: "",
       photos: uploadedUrls,
+      interests,
     });
 
     if (!result) {
@@ -117,92 +144,308 @@ export default function OnboardingScreen(): React.ReactElement {
     navigation.reset({ index: 0, routes: [{ name: "Swipe" }] });
   }
 
-  return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.header}>Create Your Profile</Text>
-      {error && <Text style={styles.error}>{error}</Text>}
+  // -------------------------------
+  // STEP 1
+  //-------------------------------
+  if (step === 1) {
+    return (
+      <ScrollView style={styles.screen}>
+        <TouchableOpacity style={styles.skip} onPress={() => navigation.navigate("Swipe")}>
+          <Text style={styles.skipText}>Skip</Text>
+        </TouchableOpacity>
 
-      <Text style={styles.label}>Name</Text>
-      <TextInput style={styles.input} value={name} onChangeText={setName} />
+        <Text style={styles.header}>Profile details</Text>
 
-      <Text style={styles.label}>Age</Text>
-      <TextInput
-        style={styles.input}
-        keyboardType="number-pad"
-        value={age}
-        onChangeText={setAge}
-      />
+        <TextInput
+          style={styles.input}
+          placeholder="First name"
+          placeholderTextColor="#aaa"
+          value={firstName}
+          onChangeText={setFirstName}
+        />
 
-      <Text style={styles.label}>Sex</Text>
-      <View style={styles.row}>
-        {sexes.map((s) => (
+        <TextInput
+          style={styles.input}
+          placeholder="Last name"
+          placeholderTextColor="#aaa"
+          value={lastName}
+          onChangeText={setLastName}
+        />
+
+        <Text style={styles.label}>Birthday</Text>
+
+        <View style={styles.birthdayWrapper}>
+          {/* MONTH */}
+          <View style={styles.pickerContainer}>
+            <Picker
+              selectedValue={selectedMonth}
+              style={styles.picker}
+              dropdownIconColor="black"
+              onValueChange={(v) => setSelectedMonth(v)}
+            >
+              {months.map((m, idx) => (
+                <Picker.Item key={idx} label={m} value={idx + 1} />
+              ))}
+            </Picker>
+          </View>
+
+          {/* DAY */}
+          <View style={styles.pickerContainer}>
+            <Picker
+              selectedValue={selectedDay}
+              style={styles.picker}
+              dropdownIconColor="black"
+              onValueChange={(v) => setSelectedDay(v)}
+            >
+              {days.map((d) => (
+                <Picker.Item key={d} label={String(d)} value={d} />
+              ))}
+            </Picker>
+          </View>
+
+          {/* YEAR */}
+          <View style={styles.pickerContainer}>
+            <Picker
+              selectedValue={selectedYear}
+              style={styles.picker}
+              dropdownIconColor="black"
+              onValueChange={(v) => setSelectedYear(v)}
+            >
+              {years.map((y) => (
+                <Picker.Item key={y} label={String(y)} value={y} />
+              ))}
+            </Picker>
+          </View>
+        </View>
+
+        {error && <Text style={styles.error}>{error}</Text>}
+
+        <TouchableOpacity style={styles.mainButton} onPress={() => setStep(2)}>
+          <Text style={styles.mainButtonText}>Confirm</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  }
+
+  // -------------------------------
+  // STEP 2
+  //-------------------------------
+  if (step === 2) {
+    return (
+      <View style={styles.screen}>
+        <TouchableOpacity style={styles.back} onPress={() => setStep(1)}>
+          <Text style={styles.backText}>←</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.skip} onPress={() => setStep(3)}>
+          <Text style={styles.skipText}>Skip</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.header}>I am a</Text>
+
+        {["Woman", "Man", "Choose another"].map((g) => (
           <TouchableOpacity
-            key={s}
-            style={[styles.selector, sex === s ? styles.selected : null]}
-            onPress={() => setSex(s)}
-          >
-            <Text style={styles.selectorText}>{s}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <Text style={styles.label}>Interested In</Text>
-      <View style={styles.row}>
-        {sexPreferences.map((pref) => (
-          <TouchableOpacity
-            key={pref}
+            key={g}
             style={[
-              styles.selector,
-              interestedInSex === pref ? styles.selected : null,
+              styles.genderOption,
+              gender === g ? styles.genderSelected : null,
             ]}
-            onPress={() => setInterestedInSex(pref)}
+            onPress={() => setGender(g)}
           >
-            <Text style={styles.selectorText}>{pref}</Text>
+            <Text
+              style={[
+                styles.genderText,
+                gender === g ? styles.genderTextSelected : null,
+              ]}
+            >
+              {g}
+            </Text>
+          </TouchableOpacity>
+        ))}
+
+        <TouchableOpacity style={styles.mainButton} onPress={() => setStep(3)}>
+          <Text style={styles.mainButtonText}>Continue</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // -------------------------------
+  // STEP 3
+  //-------------------------------
+  return (
+    <ScrollView style={styles.screen}>
+      <TouchableOpacity style={styles.back} onPress={() => setStep(2)}>
+        <Text style={styles.backText}>←</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.skip} onPress={handleSubmit}>
+        <Text style={styles.skipText}>Skip</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.header}>Your interests</Text>
+      <Text style={styles.subheader}>Select a few of your interests</Text>
+
+      <View style={styles.interestGrid}>
+        {interestsList.map((i) => (
+          <TouchableOpacity
+            key={i}
+            style={[
+              styles.interestChip,
+              interests.includes(i) ? styles.interestChipSelected : null,
+            ]}
+            onPress={() => toggleInterest(i)}
+          >
+            <Text
+              style={[
+                styles.interestChipText,
+                interests.includes(i) ? styles.interestChipTextSelected : null,
+              ]}
+            >
+              {i}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={styles.label}>Bio</Text>
-      <TextInput
-        style={[styles.input, styles.bioInput]}
-        multiline
-        value={bio}
-        onChangeText={setBio}
-      />
-
-      <Text style={styles.label}>Photos (3–5)</Text>
-      <View style={styles.photoGrid}>
-        {photos.map((uri) => (
-          <Image key={uri} source={{ uri }} style={styles.photo} />
-        ))}
-      </View>
-
-      <Button title="Add Photos" onPress={pickPhotos} />
-
-      <View style={styles.submitWrapper}>
-        <Button title="Finish" onPress={handleSubmit} />
-      </View>
+      <TouchableOpacity style={styles.mainButton} onPress={handleSubmit}>
+        <Text style={styles.mainButtonText}>Continue</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
 
+// -------------------------------
+// STYLES
+// -------------------------------
 const styles = StyleSheet.create({
-  container: { padding: 18, backgroundColor: "black", flex: 1 },
-  header: { color: "white", fontSize: 28, marginBottom: 20 },
-  label: { color: "white", marginTop: 20, marginBottom: 8 },
-  input: { backgroundColor: "white", padding: 10, borderRadius: 8 },
-  bioInput: { height: 120, textAlignVertical: "top" },
-  row: { flexDirection: "row", marginBottom: 10 },
-  selector: {
-    padding: 10,
-    backgroundColor: "#222",
-    borderRadius: 8,
-    marginRight: 8,
+  screen: {
+    flex: 1,
+    backgroundColor: "#222222",
+    padding: 24,
   },
-  selected: { backgroundColor: "#3498db" },
-  selectorText: { color: "white" },
-  photoGrid: { flexDirection: "row", flexWrap: "wrap", marginVertical: 10 },
-  photo: { width: 100, height: 100, marginRight: 10, marginBottom: 10 },
-  error: { color: "red", marginVertical: 10 },
-  submitWrapper: { marginTop: 40, marginBottom: 100 },
+
+  label: {
+    fontSize: 18,
+    fontWeight: "500",
+    color: "white",
+    marginTop: 20,
+    marginBottom: 8,
+  },
+
+  skip: { position: "absolute", top: 20, right: 20 },
+  skipText: { color: "white", fontSize: 16 },
+
+  back: { position: "absolute", top: 20, left: 20 },
+  backText: { fontSize: 26, color: "white" },
+
+  header: {
+    fontSize: 30,
+    fontWeight: "600",
+    color: "white",
+    marginTop: 70,
+    marginBottom: 20,
+  },
+
+  subheader: {
+    fontSize: 16,
+    color: "white",
+    marginBottom: 20,
+  },
+
+  // BIRTHDAY PICKER
+  birthdayWrapper: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+
+  pickerContainer: {
+    flex: 1,
+    backgroundColor: "white",
+    borderRadius: 10,
+    marginHorizontal: 4,
+    paddingHorizontal: 6,
+  },
+
+  picker: {
+    height: 52,
+    color: "black",
+  },
+
+  input: {
+    backgroundColor: "white",
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 15,
+    fontSize: 16,
+    color: "black",
+  },
+
+  mainButton: {
+    backgroundColor: "white",
+    padding: 16,
+    borderRadius: 30,
+    marginTop: 40,
+    alignItems: "center",
+    marginBottom: 40,
+  },
+
+  mainButtonText: {
+    color: "#222222",
+    fontSize: 18,
+    fontWeight: "600",
+  },
+
+  genderOption: {
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: "#f4f4f4",
+    marginBottom: 12,
+  },
+
+  genderSelected: {
+    backgroundColor: "#222222",
+  },
+
+  genderText: {
+    fontSize: 18,
+    color: "#444",
+  },
+
+  genderTextSelected: {
+    color: "white",
+  },
+
+  interestGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 10,
+    marginBottom: 20,
+  },
+
+  interestChip: {
+    borderColor: "#ccc",
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+    margin: 6,
+  },
+
+  interestChipSelected: {
+    backgroundColor: "#222222",
+    borderColor: "#222222",
+  },
+
+  interestChipText: { fontSize: 14, color: "#ccc" },
+
+  interestChipTextSelected: {
+    color: "white",
+  },
+
+  error: {
+    color: "red",
+    textAlign: "center",
+    marginTop: 10,
+  },
 });

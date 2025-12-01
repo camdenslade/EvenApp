@@ -117,4 +117,16 @@ export class ProfilesService {
 
     return { success: true };
   }
+
+  async checkProfileCompletion(uid: string): Promise<boolean> {
+    const userDoc = await this.firestore.collection('users').doc(uid).get();
+    if (!userDoc.exists) {
+      return false;
+    }
+    const userData = userDoc.data();
+    if (!userData) {
+      return false;
+    }
+    return userData && userData.profileComplete === true;
+  }
 }

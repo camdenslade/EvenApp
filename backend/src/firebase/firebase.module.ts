@@ -2,23 +2,23 @@
 import { Module } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { FirestoreService } from './firestore.service';
+import * as serviceAccount from '../../serviceAccountKey.json';
+
+const firebaseAdminProvider = {
+  provide: 'FIREBASE_ADMIN',
+  useFactory: () => {
+    const adminApp = admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
+    });
+
+    adminApp.firestore().settings({ ignoreUndefinedProperties: true });
+
+    return adminApp;
+  },
+};
 
 @Module({
-  providers: [
-    {
-      provide: 'FIREBASE_ADMIN',
-      useFactory: () => {
-        if (!admin.apps.length) {
-          admin.initializeApp({
-            credential: admin.credential.applicationDefault(),
-            databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`,
-          });
-        }
-        return admin;
-      },
-    },
-    FirestoreService,
-  ],
-  exports: ['FIREBASE_ADMIN', FirestoreService],
+  providers: [FirestoreService, firebaseAdminProvider],
+  exports: [FirestoreService],
 })
 export class FirebaseModule {}

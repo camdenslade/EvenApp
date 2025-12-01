@@ -11,7 +11,7 @@ export interface TokenResponse {
 
 interface FirebaseUserPayload {
   uid: string;
-  email: string | undefined;
+  email?: string | undefined;
 }
 
 interface RefreshTokenPayload {
@@ -29,7 +29,7 @@ export class AuthService {
   async createTokens(
     firebaseUser: FirebaseUserPayload,
   ): Promise<TokenResponse> {
-    const { uid, email } = firebaseUser;
+    const { uid } = firebaseUser;
 
     const accessPayload = { sub: uid };
     const access = this.jwt.sign(accessPayload, {
@@ -51,12 +51,6 @@ export class AuthService {
 
     if (!doc.exists) {
       isNewUser = true;
-      await userRef.set({
-        email,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        profileComplete: false,
-      });
     }
 
     return { access, refresh, isNewUser };
@@ -96,5 +90,17 @@ export class AuthService {
     } catch (error) {
       throw new UnauthorizedException(error);
     }
+  }
+
+  async checkProfileCompletion(uid: string): Promise<boolean> {
+    const userDoc = await this.firestore.collection('users').doc(uid).get();
+    if (!userDoc.exists) {
+      return false;
+    }
+    const userData = userDoc.data();
+    if (!userData) {
+      return false;
+    }
+    return userData && userData.profileComplete === true;
   }
 }
