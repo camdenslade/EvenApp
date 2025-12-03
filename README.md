@@ -12,11 +12,12 @@ Even Dating is a modern cross-platform (iOS coming soon + Android) mobile applic
 - Persistent login with encrypted local storage
 
 ## Full Profile Setup
-- A Tinder-style, step-by-step onboarding experience:
-= First name & last name
+- A Tinder-style, step-by-step onboarding
+- Name input
 - Birthday (month/day/year wheel picker)
 - Sex selection
 - Interest selection (multi-select chips)
+- Dating preference selection
 - Photo gallery upload (up to 6 photos)
 - Automatic S3 signed URL uploads
 - Profile completion guard (backend-enforced)
