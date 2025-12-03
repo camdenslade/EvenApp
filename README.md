@@ -38,7 +38,7 @@ Even Dating is a modern cross-platform (iOS coming soon + Android) mobile applic
 - Secure profile API routes
 - S3 upload URL generation
 - ProfileGuard enforcement
-- Firestore user database schema
+- Postgres user database schema
 - Analytics-safe & scalable
 
 # Tech Stack
@@ -50,6 +50,6 @@ Even Dating is a modern cross-platform (iOS coming soon + Android) mobile applic
 ## Backend
 - NestJS
 - Firebase Admin SDK
-- Firestore
+- Postgres
 - AWS S3 (Signed URLs)
 - JWT Access/Refresh Tokens
