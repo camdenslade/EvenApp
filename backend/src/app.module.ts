@@ -1,30 +1,33 @@
-import { MiddlewareConsumer, Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { RateLimitMiddleware } from './middleware/rate-limit.middleware';
-import { SwipeModule } from './swipe/swipe.module';
-import { ProfilesModule } from './profiles/profiles.module';
-import { FirebaseModule } from './firebase/firebase.module';
+import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+
+import { FirebaseAuthGuard } from './auth/guards/firebase-auth.guard';
 import { AuthModule } from './auth/auth.module';
-import { S3Module } from './s3/s3.module';
+
+import { UsersModule } from './users/users.module';
+import { ProfilesModule } from './profiles/profiles.module';
+import { SwipeModule } from './swipe/swipe.module';
 import { MatchesModule } from './matches/matches.module';
-import { ConfigModule } from '@nestjs/config';
+import { ChatModule } from './chat/chat.module';
+
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { typeormConfig } from './database/typeorm.config';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    FirebaseModule,
+    TypeOrmModule.forRoot(typeormConfig),
     AuthModule,
+    UsersModule,
     ProfilesModule,
     SwipeModule,
-    S3Module,
     MatchesModule,
+    ChatModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: FirebaseAuthGuard,
+    },
+  ],
 })
-export class AppModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer.apply(RateLimitMiddleware).forRoutes('*');
-  }
-}
+export class AppModule {}

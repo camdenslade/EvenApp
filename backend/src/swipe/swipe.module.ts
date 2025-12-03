@@ -1,13 +1,23 @@
 import { Module } from '@nestjs/common';
-import { SwipeController } from './swipe.controller';
+import { TypeOrmModule } from '@nestjs/typeorm';
+
+import { Swipe } from '../database/entities/swipe.entity';
 import { SwipeService } from './swipe.service';
-import { FirebaseModule } from '../firebase/firebase.module';
-import { AuthModule } from '../auth/auth.module';
+import { SwipeController } from './swipe.controller';
+
+import { UsersModule } from '../users/users.module';
+import { ProfilesModule } from '../profiles/profiles.module';
+import { MatchesModule } from '../matches/matches.module';
 
 @Module({
-  imports: [FirebaseModule, AuthModule],
-  controllers: [SwipeController],
+  imports: [
+    TypeOrmModule.forFeature([Swipe]),
+    UsersModule,
+    ProfilesModule,
+    MatchesModule,
+  ],
   providers: [SwipeService],
+  controllers: [SwipeController],
   exports: [SwipeService],
 })
 export class SwipeModule {}

@@ -1,17 +1,16 @@
-import React, { useState } from "react";
+// src/screens/login/LoginScreen.tsx
+import { useState } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   Image,
-  Platform,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 
-const APP_LOGO = require('../../../assets/images/Even-App-Logos/TransparentBG/EE-SolidWhite.png');
+const APP_LOGO = require("../../../assets/images/Even-App-Logos/TransparentBG/EE-SolidWhite.png");
 
 const SocialButton = ({
   iconName,
@@ -19,7 +18,7 @@ const SocialButton = ({
   onPress,
   iconColor,
   backgroundColor,
-  textColor
+  textColor,
 }: {
   iconName: keyof typeof Ionicons.glyphMap;
   title: string;
@@ -29,7 +28,7 @@ const SocialButton = ({
   textColor: string;
 }) => (
   <TouchableOpacity
-    style={[styles.socialButton, { backgroundColor: backgroundColor }]}
+    style={[styles.socialButton, { backgroundColor }]}
     onPress={onPress}
   >
     <Ionicons name={iconName} size={24} color={iconColor} style={styles.socialIcon} />
@@ -37,12 +36,28 @@ const SocialButton = ({
   </TouchableOpacity>
 );
 
-const PrimaryActionButton = ({ title, onPress, inverted = false }: { title: string, onPress: () => void, inverted?: boolean }) => (
+const PrimaryActionButton = ({
+  title,
+  onPress,
+  inverted = false,
+}: {
+  title: string;
+  onPress: () => void;
+  inverted?: boolean;
+}) => (
   <TouchableOpacity
-    style={[styles.primaryButton, inverted ? styles.invertedButton : styles.defaultButton]}
+    style={[
+      styles.primaryButton,
+      inverted ? styles.invertedButton : styles.defaultButton,
+    ]}
     onPress={onPress}
   >
-    <Text style={[styles.primaryButtonText, inverted ? styles.invertedButtonText : styles.defaultButtonText]}>
+    <Text
+      style={[
+        styles.primaryButtonText,
+        inverted ? styles.invertedButtonText : styles.defaultButtonText,
+      ]}
+    >
       {title}
     </Text>
   </TouchableOpacity>
@@ -52,19 +67,14 @@ export default function LoginScreen(): React.ReactElement {
   const navigation = useNavigation<any>();
   const [showOptions, setShowOptions] = useState(false);
 
-  const handleSocialLogin = (provider: string) => {
-    navigation.navigate("PhoneAuth", { provider: provider });
+  const handleSocialLogin = (provider: "Phone" | "Google") => {
+    navigation.navigate("PhoneAuth", { provider });
   };
 
   if (showOptions) {
     return (
       <View style={styles.container}>
-        <Image
-          source={APP_LOGO}
-          style={styles.logoImage}
-          resizeMode="contain"
-        />
-
+        <Image source={APP_LOGO} style={styles.logoImage} resizeMode="contain" />
         <Text style={styles.logoText}>Even Dating</Text>
 
         <View style={styles.policyTextWrapper}>
@@ -74,17 +84,6 @@ export default function LoginScreen(): React.ReactElement {
           </Text>
         </View>
 
-        {/*{Platform.OS === 'ios' && (
-          <SocialButton
-            iconName="logo-apple"
-            title="Sign in with Apple"
-            onPress={() => handleSocialLogin("Apple")}
-            iconColor="black"
-            backgroundColor="white"
-            textColor="black"
-          />
-        )}*/}
-
         <SocialButton
           iconName="logo-google"
           title="Sign in with Google"
@@ -93,15 +92,6 @@ export default function LoginScreen(): React.ReactElement {
           backgroundColor="white"
           textColor="black"
         />
-
-        {/*<SocialButton
-          iconName="logo-facebook"
-          title="Sign in with Facebook"
-          onPress={() => handleSocialLogin("Facebook")}
-          iconColor="white"
-          backgroundColor="#3b5998"
-          textColor="white"
-        />*/}
 
         <SocialButton
           iconName="call"
@@ -116,7 +106,10 @@ export default function LoginScreen(): React.ReactElement {
           <Text style={styles.troubleText}>Trouble signing in?</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => setShowOptions(false)} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => setShowOptions(false)}
+          style={styles.backButton}
+        >
           <Ionicons name="chevron-back" size={30} color="white" />
         </TouchableOpacity>
       </View>
@@ -125,31 +118,25 @@ export default function LoginScreen(): React.ReactElement {
 
   return (
     <View style={styles.container}>
-      <Image
-        source={APP_LOGO}
-        style={styles.logoImage}
-        resizeMode="contain"
-      />
-
+      <Image source={APP_LOGO} style={styles.logoImage} resizeMode="contain" />
       <Text style={styles.logoText}>Even Dating</Text>
 
       <View style={styles.policyTextWrapper}>
         <Text style={styles.policyText}>
-          By tapping 'Create account' or 'Sign in', you agree to our Terms. Learn how we process your
-          data in our Privacy Policy and Cookies Policy.
+          By tapping 'Create account' or 'Sign in', you agree to our Terms. Learn how
+          we process your data in our Privacy Policy and Cookies Policy.
         </Text>
       </View>
 
       <PrimaryActionButton
         title="Create Account"
         onPress={() => handleSocialLogin("Phone")}
-        inverted={false}
       />
 
       <PrimaryActionButton
         title="Sign In"
         onPress={() => setShowOptions(true)}
-        inverted={true}
+        inverted
       />
 
       <TouchableOpacity style={styles.troubleButton}>
@@ -164,16 +151,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#222222",
     padding: 30,
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
     paddingBottom: 60,
   },
   logoImage: {
     width: 250,
     height: 80,
-    resizeMode: 'contain',
-    position: 'absolute',
+    resizeMode: "contain",
+    position: "absolute",
     top: 100,
-    alignSelf: 'center',
+    alignSelf: "center",
   },
   policyTextWrapper: {
     marginBottom: 20,
@@ -182,20 +169,20 @@ const styles = StyleSheet.create({
   policyText: {
     color: "#AAAAAA",
     fontSize: 13,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 18,
   },
   logoText: {
     color: "white",
     fontSize: 48,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    position: 'absolute',
-    alignSelf: 'center',
+    fontWeight: "bold",
+    textAlign: "center",
+    position: "absolute",
+    alignSelf: "center",
     top: 200,
   },
   backButton: {
-    position: 'absolute',
+    position: "absolute",
     top: 50,
     left: 20,
     zIndex: 10,
@@ -204,51 +191,51 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     marginBottom: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: 'white',
+    borderColor: "white",
   },
   defaultButton: {
-    backgroundColor: 'white',
+    backgroundColor: "white",
   },
   invertedButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   primaryButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   defaultButtonText: {
-    color: 'black',
+    color: "black",
   },
   invertedButtonText: {
-    color: 'white',
+    color: "white",
   },
   socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     height: 50,
     borderRadius: 25,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: 'white',
+    borderColor: "white",
   },
   socialIcon: {
     marginRight: 10,
   },
   socialText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   troubleButton: {
     marginTop: 15,
   },
   troubleText: {
-    color: 'white',
-    textAlign: 'center',
+    color: "white",
+    textAlign: "center",
     fontSize: 16,
-    fontWeight: '600',
-  }
+    fontWeight: "600",
+  },
 });

@@ -1,132 +1,92 @@
-import { Injectable } from '@nestjs/common';
-import { FirestoreService } from '../firebase/firestore.service';
-import type { SetupProfileData } from './types/setup-profile';
-import type { UpdateProfileData } from './types/update-profile';
-import {
-  CollectionReference,
-  QuerySnapshot,
-  QueryDocumentSnapshot,
-} from 'firebase-admin/firestore';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
-type Sex = 'male' | 'female';
-type SexPreference = 'male' | 'female' | 'everyone';
-
-interface UserData {
-  name: string;
-  age: number;
-  sex: Sex;
-  interestedInSex: SexPreference;
-  bio: string;
-  photos: string[];
-  [key: string]: unknown;
-}
-
-export interface Profile extends UserData {
-  id: string;
-}
+import { Profile } from '../database/entities/profile.entity';
+import { Swipe } from '../database/entities/swipe.entity';
+import { UsersService } from '../users/users.service';
+import { S3Service } from '../s3/s3.service';
+import { SetupProfileDto } from './dto/setup-profile.dto';
 
 @Injectable()
 export class ProfilesService {
-  constructor(private firestore: FirestoreService) {}
+  constructor(
+    @InjectRepository(Profile)
+    private readonly profilesRepo: Repository<Profile>,
 
-  async getQueue(uid: string): Promise<Profile[]> {
-    const usersRef: CollectionReference<UserData> =
-      this.firestore.collection('users');
+    @InjectRepository(Swipe)
+    private readonly swipeRepo: Repository<Swipe>,
 
-    const viewerDoc = await usersRef.doc(uid).get();
-    if (!viewerDoc.exists) return [];
-    const viewer = viewerDoc.data() as UserData;
+    private readonly usersService: UsersService,
+    private readonly s3: S3Service,
+  ) {}
 
-    const swipeSnapshot = await this.firestore
-      .collection('swipes')
-      .doc(uid)
-      .collection('targets')
-      .get();
-
-    const swiped = new Set<string>();
-    swipeSnapshot.forEach((d) => swiped.add(d.id));
-
-    const matchSnapshot = await this.firestore
-      .collection('matches')
-      .where('users', 'array-contains', uid)
-      .get();
-
-    const matched = new Set<string>();
-    matchSnapshot.forEach((m) => {
-      const ids = m.data().users as string[];
-      const other = ids.find((id) => id !== uid);
-      if (other) matched.add(other);
+  async getProfile(uid: string): Promise<Profile | null> {
+    return this.profilesRepo.findOne({
+      where: { userUid: uid },
     });
-
-    const allUsers: QuerySnapshot<UserData> = await usersRef.get();
-    const results: Profile[] = [];
-
-    allUsers.forEach((doc: QueryDocumentSnapshot<UserData>) => {
-      const tid = doc.id;
-      if (tid === uid) return;
-      if (swiped.has(tid)) return;
-      if (matched.has(tid)) return;
-
-      const data = doc.data();
-      if (!data.name || !data.age) return;
-      if (!data.sex || !data.interestedInSex) return;
-      if (!Array.isArray(data.photos) || data.photos.length < 3) return;
-
-      const viewerPref =
-        viewer.interestedInSex === 'everyone' ||
-        viewer.interestedInSex === data.sex;
-
-      const targetPref =
-        data.interestedInSex === 'everyone' ||
-        data.interestedInSex === viewer.sex;
-
-      if (!viewerPref || !targetPref) return;
-
-      results.push({ id: tid, ...data });
-    });
-
-    return results.sort(() => Math.random() - 0.5).slice(0, 20);
   }
 
-  async setupProfile(uid: string, data: SetupProfileData) {
-    await this.firestore.collection('users').doc(uid).set(data);
-    await this.firestore
-      .collection('profiles')
-      .doc(uid)
-      .set({
-        name: data.name,
-        profileImageUrl: data.photos[0] ?? '',
+  async checkStatus(uid: string): Promise<'missing' | 'complete'> {
+    const p = await this.getProfile(uid);
+    return p ? 'complete' : 'missing';
+  }
+
+  async createUploadUrl(fileType: string) {
+    return this.s3.createUploadUrl(fileType);
+  }
+
+  async setup(uid: string, dto: SetupProfileDto): Promise<Profile> {
+    await this.usersService.ensureUserExists(uid, null, null);
+
+    let profile = await this.getProfile(uid);
+
+    if (!profile) {
+      profile = this.profilesRepo.create({
+        userUid: uid,
+        ...dto,
       });
+    } else {
+      Object.assign(profile, dto);
+    }
 
-    return { success: true };
+    return this.profilesRepo.save(profile);
   }
 
-  async updateProfile(uid: string, data: UpdateProfileData) {
-    const userRef = this.firestore.collection('users').doc(uid);
-    await userRef.set(data, { merge: true });
+  async updateProfile(uid: string, data: Partial<Profile>): Promise<Profile> {
+    const profile = await this.getProfile(uid);
+    if (!profile) throw new NotFoundException('Profile not found');
 
-    if (data.photos && data.photos.length > 0) {
-      await this.firestore.collection('profiles').doc(uid).set(
-        {
-          name: data.name,
-          profileImageUrl: data.photos[0],
-        },
-        { merge: true },
-      );
-    }
+    Object.assign(profile, data);
 
-    return { success: true };
+    return this.profilesRepo.save(profile);
   }
 
-  async checkProfileCompletion(uid: string): Promise<boolean> {
-    const userDoc = await this.firestore.collection('users').doc(uid).get();
-    if (!userDoc.exists) {
-      return false;
+  async getSwipeQueue(uid: string) {
+    const myProfile = await this.getProfile(uid);
+    if (!myProfile) return [];
+
+    const swiped = await this.swipeRepo.find({
+      where: { swiperUid: uid },
+    });
+
+    const swipedIds = new Set(swiped.map((s) => s.targetUid));
+    swipedIds.add(uid);
+
+    const query = this.profilesRepo
+      .createQueryBuilder('p')
+      .where('p.userUid NOT IN (:...uids)', { uids: Array.from(swipedIds) });
+
+    if (myProfile.sexPreference !== 'everyone') {
+      query.andWhere('p.sex = :pref', { pref: myProfile.sexPreference });
     }
-    const userData = userDoc.data();
-    if (!userData) {
-      return false;
-    }
-    return userData && userData.profileComplete === true;
+
+    query.andWhere('p.sexPreference IN (:...accepted)', {
+      accepted: ['everyone', myProfile.sex],
+    });
+
+    query.orderBy('RANDOM()');
+
+    return query.limit(20).getMany();
   }
 }

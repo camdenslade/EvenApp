@@ -1,16 +1,24 @@
-import { Controller, Get, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body } from '@nestjs/common';
 import { MatchesService } from './matches.service';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard';
-import type { AuthenticatedRequest } from '../guards/jwt-auth.guard';
+import { FirebaseUser } from '../auth/firebase/firebase-user.decorator';
 
-@Controller()
+@Controller('matches')
 export class MatchesController {
   constructor(private readonly matchesService: MatchesService) {}
 
-  @UseGuards(JwtAuthGuard)
-  @Get('matches')
-  async getMatches(@Req() req: AuthenticatedRequest) {
-    const currentUserId = req.user.uid;
-    return this.matchesService.getMatches(currentUserId);
+  // GET /matches/me
+  @Get('me')
+  async getMyMatches(@FirebaseUser() user: { uid: string }) {
+    return this.matchesService.getMatches(user.uid);
+  }
+
+  // POST /matches
+  // Body: { "targetId": "<uid>" }
+  @Post()
+  async createMatch(
+    @FirebaseUser() user: { uid: string },
+    @Body('targetId') targetId: string,
+  ) {
+    return this.matchesService.createMatch(user.uid, targetId);
   }
 }

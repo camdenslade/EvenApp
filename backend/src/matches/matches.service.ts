@@ -1,84 +1,79 @@
 import { Injectable } from '@nestjs/common';
-import { FirestoreService } from '../firebase/firestore.service';
-import type { Timestamp } from 'firebase-admin/firestore';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, In } from 'typeorm';
 
-interface MatchData {
-  users: string[];
-  matchedAt: Timestamp;
-}
+import { Match } from '../database/entities/match.entity';
+import { Thread } from '../database/entities/thread.entity';
+import { Profile } from '../database/entities/profile.entity';
 
-interface UserProfile {
-  name: string;
-  profileImageUrl: string;
-  [key: string]: any;
-}
+import { ProfilesService } from '../profiles/profiles.service';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class MatchesService {
-  constructor(private readonly firestore: FirestoreService) {}
+  constructor(
+    @InjectRepository(Match)
+    private readonly matchesRepo: Repository<Match>,
 
-  async getMatches(currentUserId: string) {
-    const querySnapshot = await this.firestore
-      .collection('matches')
-      .where('users', 'array-contains', currentUserId)
-      .get();
+    @InjectRepository(Thread)
+    private readonly threadsRepo: Repository<Thread>,
 
-    if (querySnapshot.empty) {
-      return [];
-    }
+    @InjectRepository(Profile)
+    private readonly profilesRepo: Repository<Profile>,
 
-    const otherUserIds: string[] = [];
-    const matchMetadata: { [key: string]: { id: string; matchedAt: Date } } =
-      {};
+    private readonly users: UsersService,
+    private readonly profiles: ProfilesService,
+  ) {}
 
-    querySnapshot.docs.forEach((doc) => {
-      const matchData = doc.data() as MatchData;
-      const otherUserId = matchData.users.find(
-        (id: string) => id !== currentUserId,
-      );
+  async createMatch(uidA: string, uidB: string) {
+    await this.users.ensureUserExists(uidA, null, null);
+    await this.users.ensureUserExists(uidB, null, null);
 
-      if (otherUserId) {
-        otherUserIds.push(otherUserId);
-        matchMetadata[otherUserId] = {
-          id: doc.id,
-          matchedAt: matchData.matchedAt.toDate(),
-        };
-      }
+    const existing = await this.matchesRepo.findOne({
+      where: [
+        { userAUid: uidA, userBUid: uidB },
+        { userAUid: uidB, userBUid: uidA },
+      ],
     });
 
-    if (otherUserIds.length === 0) {
-      return [];
-    }
+    if (existing) return existing;
 
-    const profilesSnapshot = await this.firestore
-      .collection('users')
-      .where('uid', 'in', otherUserIds.slice(0, 10))
-      .get();
+    const match = this.matchesRepo.create({
+      userAUid: uidA,
+      userBUid: uidB,
+    });
+    const saved = await this.matchesRepo.save(match);
 
-    const usersMap = new Map<string, UserProfile>();
-    profilesSnapshot.docs.forEach((doc) => {
-      usersMap.set(doc.id, doc.data() as UserProfile);
+    const thread = this.threadsRepo.create({
+      matchId: saved.id,
+    });
+    await this.threadsRepo.save(thread);
+
+    return saved;
+  }
+
+  async getMatches(uid: string) {
+    const matches = await this.matchesRepo.find({
+      where: [{ userAUid: uid }, { userBUid: uid }],
     });
 
-    const matches = otherUserIds
-      .map((userId) => {
-        const userProfile = usersMap.get(userId);
+    const otherUserUids = matches.map((m) =>
+      m.userAUid === uid ? m.userBUid : m.userAUid,
+    );
 
-        if (userProfile) {
-          return {
-            matchId: matchMetadata[userId].id,
-            matchedAt: matchMetadata[userId].matchedAt,
-            otherUser: {
-              uid: userId,
-              name: userProfile.name,
-              profileImageUrl: userProfile.profileImageUrl,
-            },
-          };
-        }
-        return null;
-      })
-      .filter((match) => match !== null);
+    const profiles = await this.profilesRepo.find({
+      where: { userUid: In(otherUserUids) },
+    });
 
-    return matches;
+    return matches.map((match) => {
+      const otherUid = match.userAUid === uid ? match.userBUid : match.userAUid;
+
+      return {
+        matchId: match.id,
+        userUid: otherUid,
+        profile: profiles.find((p) => p.userUid === otherUid) || null,
+        createdAt: match.createdAt,
+      };
+    });
   }
 }

@@ -1,63 +1,39 @@
-import React, { useEffect } from "react";
-import { View, ActivityIndicator, Alert } from "react-native";
+// src/screens/login/AuthLoadingScreen.tsx
+import { useEffect } from "react";
+import { View, ActivityIndicator } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { getAccessToken, getRefreshToken, saveTokens } from "../../services/authStorage";
-import { apiPost } from "../../services/apiService";
+import { auth } from "../../services/firebase";
+import { apiGet } from "../../services/apiService";
 
-export default function AuthLoadingScreen(): React.ReactElement {
+export default function AuthLoadingScreen() {
   const navigation = useNavigation<any>();
 
   useEffect(() => {
-    async function check() {
-      try {
-        const access = await getAccessToken();
+    async function load() {
+      const user = auth.currentUser;
 
-        const refresh = await getRefreshToken();
-        let tokens: { access: string; refresh: string } | null = null;
-
-        if (access || refresh) {
-          if (refresh) {
-            tokens = await apiPost<{ access: string; refresh: string }>(
-              "/auth/refresh",
-              { refreshToken: refresh }
-            );
-          }
-
-          if (tokens) {
-            await saveTokens(tokens.access, tokens.refresh);
-          }
-
-          const profileStatus = await apiPost<{ profileComplete: boolean }>(
-            "/profiles/status",
-            {}
-          );
-
-          if (profileStatus) {
-            navigation.reset({ index: 0, routes: [{ name: "Swipe" }] });
-            return;
-          }
-        }
-      } catch (error: any) {
-        console.error("Auth check failed:", error);
-
-        if (error instanceof Error && error.message === "Profile setup required") {
-          navigation.reset({ index: 0, routes: [{ name: "Onboarding" }] });
-          return;
-        }
-
-        Alert.alert("Error", "Could not complete authentication check.");
+      if (!user) {
+        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+        return;
       }
 
-      navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+      const status = await apiGet<{ profileComplete: boolean }>("/profiles/status");
+
+      if (!status || !status.profileComplete) {
+        navigation.reset({ index: 0, routes: [{ name: "Onboarding" }] });
+        return;
+      }
+
+      navigation.reset({ index: 0, routes: [{ name: "Swipe" }] });
     }
 
-    check();
+    load();
   }, []);
 
-
   return (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "black" }}>
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#222" }}>
       <ActivityIndicator size="large" color="white" />
     </View>
   );
 }
+

@@ -1,17 +1,20 @@
-import { Controller, Get, UseGuards, Req } from '@nestjs/common';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { FirestoreService } from './firebase/firestore.service';
-import type { AuthenticatedRequest } from './guards/jwt-auth.guard';
+import { Controller, Get } from '@nestjs/common';
+import { ProfilesService } from './profiles/profiles.service';
+import { FirebaseUser } from './auth/firebase/firebase-user.decorator';
 
 @Controller()
 export class AppController {
-  constructor(private readonly firestore: FirestoreService) {}
+  constructor(private readonly profilesService: ProfilesService) {}
 
-  @UseGuards(JwtAuthGuard)
   @Get('me')
-  async me(@Req() req: AuthenticatedRequest) {
-    const uid = req.user.uid;
-    const data = await this.firestore.collection('users').doc(uid).get();
-    return data.exists ? data.data() : null;
+  async me(
+    @FirebaseUser()
+    user: {
+      uid: string;
+      email: string | null;
+      phone: string | null;
+    },
+  ) {
+    return this.profilesService.getProfile(user.uid);
   }
 }

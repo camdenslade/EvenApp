@@ -1,22 +1,27 @@
-// app/services/apiService.ts
 import { Platform } from "react-native";
-import { getAccessToken } from "./authStorage";
+import { auth } from "../services/firebase";
 
-const BASE_URL =
-  Platform.OS === "android"
-    ? "http://10.0.2.2:3000/api"
-    : "http://localhost:3000/api";
+const LOCAL_IP = "192.168.0.88";
+
+const BASE_URL = `http://${LOCAL_IP}:3000/api`;
+
+async function getFirebaseToken() {
+  const user = auth.currentUser;
+  if (!user) return null;
+  return await user.getIdToken(true);
+}
 
 export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T | null> {
   try {
-    const accessToken = await getAccessToken();
+    const idToken = await getFirebaseToken();
+
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...(options.headers as Record<string, string>),
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
     };
 
     const res = await fetch(`${BASE_URL}${endpoint}`, {
@@ -24,21 +29,14 @@ export async function apiRequest<T>(
       headers,
     });
 
-    if (res.status === 403) {
-      throw new Error('Profile setup incomplete!');
-    }
-
+    if (res.status === 403) throw new Error("Profile setup required");
     if (res.status === 204) return null;
-    if (!res.ok) {
-      console.error(`API error ${res.status}: ${endpoint}`);
-      return null;
-    }
+    if (!res.ok) return null;
 
-    const data = (await res.json()) as T;
-    return data;
+    return (await res.json()) as T;
   } catch (error) {
     console.error("apiRequest error:", error);
-    throw error;
+    return null;
   }
 }
 

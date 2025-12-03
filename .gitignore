@@ -47,3 +47,8 @@ app.json
 src/hooks/firebase.ts
 backend/serviceAccountKey.json
 firebase.ts
+babel.config.js
+app.json
+src/services/apiService.ts
+src/services/apiService.ts
+src/services/socket.ts

@@ -1,6 +1,7 @@
 import React from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { NavigationContainer } from "@react-navigation/native";
-import { createNativeStackNavigator, NativeStackScreenProps } from "@react-navigation/native-stack";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import AuthLoadingScreen from "./src/screens/login/AuthLoadingScreen";
 import LoginScreen from "./src/screens/login/LoginScreen";
@@ -10,6 +11,10 @@ import ProfileScreen from "./src/screens/profile/ProfileScreen";
 import EditProfileScreen from "./src/screens/profile/EditProfileScreen";
 import PhoneAuthScreen from "./src/screens/login/PhoneAuthScreen";
 
+import MatchesScreen from "./src/screens/matches/MatchesScreen";
+import MessagesScreen from "./src/screens/messages/MessagesScreen";
+import ChatScreen from "./src/screens/messages/ChatScreen";
+
 export type RootStackParamList = {
   AuthLoading: undefined;
   Login: undefined;
@@ -18,74 +23,66 @@ export type RootStackParamList = {
   Profile: undefined;
   EditProfile: undefined;
   PhoneAuth: { provider: string };
+  Matches: undefined;
+  Messages: undefined;
+  Chat: { threadId: string; targetId?: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-type NavigationProps<T extends keyof RootStackParamList> = NativeStackScreenProps<
-  RootStackParamList,
-  T
->;
-
-function ScreenWrapper<P extends Record<string, any>, C extends Record<string, any>>({
-  Component,
-  navProps,
-  customProps,
-}: {
-  Component: React.ComponentType<P & C>;
-  navProps: P;
-  customProps: C;
-}) {
-  return <Component {...(navProps as P)} {...(customProps as C)} />;
-}
-
-export default function App(): React.ReactElement {
+export default function App() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="AuthLoading" screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="AuthLoading" component={AuthLoadingScreen} />
-        <Stack.Screen name="Login" component={LoginScreen} />
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <NavigationContainer>
+        <Stack.Navigator
+          initialRouteName="AuthLoading"
+          screenOptions={{ headerShown: false }}
+        >
+          <Stack.Screen name="AuthLoading" component={AuthLoadingScreen} />
+          <Stack.Screen name="Login" component={LoginScreen} />
 
-        <Stack.Screen name="Onboarding">
-          {(props) => (
-            <ScreenWrapper
-              Component={OnboardingScreen}
-              navProps={props as NavigationProps<"Onboarding">}
-              customProps={{
-                onComplete: () => props.navigation.reset({ index: 0, routes: [{ name: "Swipe" }] }),
-              }}
-            />
-          )}
-        </Stack.Screen>
+          <Stack.Screen name="Onboarding">
+            {(props) => (
+              <OnboardingScreen
+                {...props}
+                onComplete={() =>
+                  props.navigation.reset({
+                    index: 0,
+                    routes: [{ name: "Swipe" }],
+                  })
+                }
+              />
+            )}
+          </Stack.Screen>
 
-        <Stack.Screen name="Swipe" component={SwipeScreen} />
+          <Stack.Screen name="Swipe" component={SwipeScreen} />
 
-        <Stack.Screen name="Profile">
-          {(props) => (
-            <ScreenWrapper
-              Component={ProfileScreen}
-              navProps={props as NavigationProps<"Profile">}
-              customProps={{
-                onEdit: () => props.navigation.navigate("EditProfile"),
-              }}
-            />
-          )}
-        </Stack.Screen>
+          <Stack.Screen name="Matches" component={MatchesScreen} />
+          <Stack.Screen name="Messages" component={MessagesScreen} />
 
-        <Stack.Screen name="EditProfile">
-          {(props) => (
-            <ScreenWrapper
-              Component={EditProfileScreen}
-              navProps={props as NavigationProps<"EditProfile">}
-              customProps={{
-                onDone: () => props.navigation.goBack(),
-              }}
-            />
-          )}
-        </Stack.Screen>
+          <Stack.Screen name="Chat" component={ChatScreen} />
 
-        <Stack.Screen name="PhoneAuth" component={PhoneAuthScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+          <Stack.Screen name="Profile">
+            {(props) => (
+              <ProfileScreen
+                {...props}
+                onEdit={() => props.navigation.navigate("EditProfile")}
+              />
+            )}
+          </Stack.Screen>
+
+          <Stack.Screen name="EditProfile">
+            {(props) => (
+              <EditProfileScreen
+                {...props}
+                onDone={() => props.navigation.goBack()}
+              />
+            )}
+          </Stack.Screen>
+
+          <Stack.Screen name="PhoneAuth" component={PhoneAuthScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </GestureHandlerRootView>
   );
 }

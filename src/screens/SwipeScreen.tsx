@@ -1,137 +1,118 @@
-// app/screens/SwipeScreen.tsx
+// src/screens/SwipeScreen.tsx
+import { useEffect, useState, useCallback } from "react";
+import { View, StyleSheet, TouchableOpacity, Text } from "react-native";
 
-import React from "react";
-import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  StyleSheet,
-} from "react-native";
-import useSwipeQueue from "../hooks/useSwipeQueue";
-import { useNavigation } from "@react-navigation/native";
+import { useSwipeQueue } from "../hooks/useSwipeQueue";
+import SwipeDeck from "../components/SwipeDeck";
+import { BottomButtons } from "../components/BottomButtons";
+import { BottomNavBar } from "../components/BottomNavBar";
+import { MatchModal } from "../components/MatchModal";
 
-export default function SwipeScreen(): React.ReactElement {
-  const navigation = useNavigation<any>();
-  const { state, currentProfile, handleSwipe } = useSwipeQueue();
+export default function SwipeScreen({ navigation }: any) {
+  const {
+    profiles,
+    state,
+    currentProfile,
+    handleSwipe,
+    undoLast,
+    shuffle,
+  } = useSwipeQueue();
 
-  const disabled = state.status !== "IDLE";
+  const interactionDisabled = state.status !== "IDLE";
 
-  let body: React.ReactElement;
+  const [matchOpen, setMatchOpen] = useState(false);
+  const [matchPhotos, setMatchPhotos] = useState({ me: "", them: "" });
 
-  if (state.status === "LOADING") {
-    body = <Text style={styles.status}>Loading…</Text>;
-  } else if (state.status === "ERROR") {
-    body = (
-      <View>
-        <Text style={styles.error}>Error: {state.errorMessage}</Text>
-      </View>
-    );
-  } else if (state.status === "MATCH_FOUND") {
-    body = (
-      <View style={styles.matchBox}>
-        <Text style={styles.matchTitle}>
-          You matched with {state.newMatch.otherUser.name}!
-        </Text>
-      </View>
-    );
-  } else if (!currentProfile) {
-    body = (
-      <View style={styles.emptyBox}>
-        <Text style={styles.emptyTitle}>No Profiles</Text>
-        <Text style={styles.emptySubtitle}>Check back soon.</Text>
-      </View>
-    );
-  } else {
-    body = (
-      <View style={styles.card}>
-        <Image
-          source={{ uri: currentProfile.profileImageUrl }}
-          style={styles.photo}
-        />
-        <Text style={styles.name}>
-          {currentProfile.name}, {currentProfile.age}
-        </Text>
-        <Text style={styles.location}>
-          {currentProfile.age}
-        </Text>
-        <Text style={styles.bio}>{currentProfile.bio}</Text>
-      </View>
-    );
-  }
+  useEffect(() => {
+    if (state.status === "MATCH_FOUND") {
+      setMatchPhotos({
+        me: state.mePhoto ?? "",
+        them: state.themPhoto ?? "",
+      });
+      setMatchOpen(true);
+    }
+  }, [state]);
+
+
+  const onSwipeLeft = useCallback(() => handleSwipe("SKIP"), [handleSwipe]);
+  const onSwipeRight = useCallback(() => handleSwipe("SKIP"), [handleSwipe]);
+  const onMessagePress = useCallback(() => {
+    console.log("TODO: Paid message flow");
+  }, []);
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.profileButton}
-        onPress={() => navigation.navigate("Profile")}
-      >
-        <Text style={styles.profileButtonText}>Profile</Text>
-      </TouchableOpacity>
+      <View style={styles.deckWrapper}>
+        {currentProfile ? (
+          <SwipeDeck
+            profiles={profiles}
+            onSwipeLeft={onSwipeLeft}
+            onSwipeRight={onSwipeRight}
+          />
+        ) : (
+          <View style={styles.centerBox}>
+            <Text style={styles.emptyTitle}>Sorry!</Text>
+            <Text style={styles.emptySubtitle}>
+              Nobody nearby. Try again later.
+            </Text>
 
-      {body}
-
-      <View style={styles.row}>
-        <TouchableOpacity
-          style={[styles.button, styles.skip]}
-          disabled={disabled}
-          onPress={() => handleSwipe("SKIP")}
-        >
-          <Text style={styles.buttonText}>Skip</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.button, styles.like]}
-          disabled={disabled}
-          onPress={() => handleSwipe("LIKE")}
-        >
-          <Text style={styles.buttonText}>Like</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.button, styles.super]}
-          disabled={disabled}
-          onPress={() => handleSwipe("SUPER_LIKE")}
-        >
-          <Text style={styles.buttonText}>Super Like</Text>
-        </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={shuffle}>
+              <Text style={styles.actionText}>Shuffle</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
-      <Text style={styles.stateText}>State: {state.status}</Text>
+      <BottomButtons
+        disabled={interactionDisabled}
+        onUndo={undoLast}
+        onLike={() => handleSwipe("LIKE")}
+        onMessage={onMessagePress}
+      />
+
+      <BottomNavBar navigation={navigation} active="swipe" />
+
+      <MatchModal
+        visible={matchOpen}
+        mePhoto={matchPhotos.me}
+        themPhoto={matchPhotos.them}
+        onClose={() => setMatchOpen(false)}
+        onMessage={() => {
+          setMatchOpen(false);
+          navigation.navigate("Messages");
+        }}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 18, backgroundColor: "black", flex: 1 },
-  photo: { width: "100%", height: 300, borderRadius: 12 },
-  card: {
-    backgroundColor: "#1a1a1a",
-    padding: 18,
-    borderRadius: 14,
-  },
-  name: { color: "white", fontSize: 20, marginTop: 12 },
-  location: { color: "#bbb" },
-  bio: { color: "#ccc", marginTop: 8 },
-  status: { color: "white" },
-  error: { color: "red" },
-  matchBox: { padding: 20 },
-  matchTitle: { color: "#4cd137", fontSize: 20 },
-  emptyBox: { padding: 40, alignItems: "center" },
-  emptyTitle: { color: "white", fontSize: 22 },
-  emptySubtitle: { color: "#aaa", marginTop: 8 },
-  row: { flexDirection: "row", justifyContent: "space-around", marginTop: 30 },
-  button: {
-    padding: 12,
-    borderRadius: 10,
-    minWidth: 80,
+  container: { flex: 1, backgroundColor: "#222" },
+  deckWrapper: { flex: 1, marginBottom: 120 },
+
+  centerBox: {
+    flex: 1,
+    justifyContent: "center",
     alignItems: "center",
+    paddingHorizontal: 30,
   },
-  skip: { backgroundColor: "#f39c12" },
-  like: { backgroundColor: "#3498db" },
-  super: { backgroundColor: "#9b59b6" },
-  buttonText: { color: "white" },
-  stateText: { color: "#888", marginTop: 20 },
-  profileButton: { alignSelf: "flex-end", marginBottom: 12 },
-  profileButtonText: { color: "#3498db", fontSize: 16 },
+
+  actionBtn: {
+    marginTop: 20,
+    backgroundColor: "white",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+
+  actionText: { color: "#222", fontSize: 18, fontWeight: "600" },
+
+  emptyTitle: { fontSize: 24, fontWeight: "bold", color: "white" },
+  emptySubtitle: {
+    fontSize: 16,
+    color: "#aaa",
+    textAlign: "center",
+    lineHeight: 22,
+    marginTop: 4,
+  },
 });

@@ -1,97 +1,128 @@
-import { useState, useEffect, useCallback } from "react";
+// src/hooks/useSwipeQueue.ts
+import { useState, useEffect, useCallback, useRef } from "react";
+import { apiGet, apiPost } from "../services/apiService";
 import { UserProfile, SwipeAction } from "../types/user";
+import shuffleArray from "../utils/shuffle";
 import {
-  SwipeState,
   IdleState,
   LoadingState,
   ErrorState,
   MatchFoundState,
+  SwipeState,
 } from "../types/state";
-import { apiGet, apiPost } from "../services/apiService";
 
-export default function useSwipeQueue() {
+export function useSwipeQueue() {
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [state, setState] = useState<SwipeState>({
     status: "IDLE",
     currentProfile: null,
-  } as IdleState);
+  });
+
+  const lastSwipes = useRef<
+    { profile: UserProfile; action: SwipeAction }[]
+  >([]);
 
   const currentProfile = profiles.length > 0 ? profiles[0] : null;
 
-  const refillQueue = useCallback(async () => {
+  const loadInitialQueue = useCallback(async () => {
+    setState({
+      status: "LOADING",
+      targetProfileId: "",
+    } as LoadingState);
+
     const data = await apiGet<UserProfile[]>("/profiles/queue");
+
     if (data && data.length > 0) {
       setProfiles(data);
       setState({
         status: "IDLE",
         currentProfile: data[0],
       } as IdleState);
+    } else {
+      setProfiles([]);
+      setState({
+        status: "IDLE",
+        currentProfile: null,
+      } as IdleState);
     }
   }, []);
 
   useEffect(() => {
-    (async () => {
-      setState({
-        status: "LOADING",
-        targetProfileId: "",
-      } as LoadingState);
+    loadInitialQueue();
+  }, [loadInitialQueue]);
 
-      const data = await apiGet<UserProfile[]>("/profiles/queue");
-
-      if (data && data.length > 0) {
-        setProfiles(data);
-        setState({
-          status: "IDLE",
-          currentProfile: data[0],
-        } as IdleState);
-      } else {
-        setState({
-          status: "ERROR",
-          errorMessage: "No profiles found",
-          targetProfileId: "",
-        } as ErrorState);
-      }
-    })();
+  const refillQueue = useCallback(async () => {
+    const more = await apiGet<UserProfile[]>("/profiles/queue");
+    if (more && more.length > 0) {
+      setProfiles((prev) => [...prev, ...more]);
+    }
   }, []);
 
-  const handleSwipe = async (action: SwipeAction) => {
-    if (state.status !== "IDLE" || !currentProfile) return;
+  const shuffle = useCallback(() => {
+    setProfiles((prev) => {
+      const shuffled = shuffleArray([...prev]);
+      setState({
+        status: "IDLE",
+        currentProfile: shuffled.length > 0 ? shuffled[0] : null,
+      } as IdleState);
+      return shuffled;
+    });
+  }, []);
 
-    const swipedId = currentProfile.id;
+  const reload = useCallback(async () => {
+    setProfiles([]);
+    await loadInitialQueue();
+  }, [loadInitialQueue]);
 
-    setState({
-      status: "LOADING",
-      targetProfileId: swipedId,
-    } as LoadingState);
+  const handleSwipe = useCallback(
+    async (action: SwipeAction) => {
+      if (!currentProfile) return;
 
-    try {
-      const result = await apiPost<SwipeState>("/swipe", {
-        targetId: swipedId,
+      const swipedProfile = currentProfile;
+
+      lastSwipes.current.push({
+        profile: swipedProfile,
         action,
       });
 
-      if (!result) {
-        setState({
-          status: "ERROR",
-          errorMessage: "Network error",
-          targetProfileId: swipedId,
-        } as ErrorState);
-        return;
-      }
+      setState({
+        status: "LOADING",
+        targetProfileId: swipedProfile.id,
+      } as LoadingState);
 
-      if (result.status === "ERROR") {
-        setState(result as ErrorState);
-        return;
-      }
+      try {
+        const backendAction = action === "LIKE" ? "right" : "left";
 
-      if (result.status === "MATCH_FOUND") {
-        setState(result as MatchFoundState);
-        setProfiles((prev) => prev.slice(1));
-        if (profiles.length <= 3) refillQueue();
-        return;
-      }
+        const result = await apiPost<{
+          match: boolean;
+          matchId?: string;
+        }>("/swipe", {
+          targetId: swipedProfile.id,
+          action: backendAction,
+        });
 
-      if (result.status === "IDLE") {
+        if (!result) {
+          setState({
+            status: "ERROR",
+            targetProfileId: swipedProfile.id,
+            errorMessage: "Swipe failed",
+          } as ErrorState);
+          return;
+        }
+
+        if (result.match) {
+          setState({
+            status: "MATCH_FOUND",
+            matchId: result.matchId || swipedProfile.id,
+            targetProfile: swipedProfile,
+            mePhoto: swipedProfile.photos?.[0] ?? null,
+            themPhoto: swipedProfile.photos?.[0] ?? null,
+          } as MatchFoundState);
+
+          if (profiles.length <= 3) refillQueue();
+          return;
+        }
+
         const nextQueue = profiles.slice(1);
         setProfiles(nextQueue);
 
@@ -101,15 +132,35 @@ export default function useSwipeQueue() {
         } as IdleState);
 
         if (nextQueue.length <= 3) refillQueue();
+      } catch {
+        setState({
+          status: "ERROR",
+          targetProfileId: swipedProfile.id,
+          errorMessage: "Something went wrong",
+        } as ErrorState);
       }
-    } catch {
-      setState({
-        status: "ERROR",
-        errorMessage: "Something went wrong",
-        targetProfileId: swipedId,
-      } as ErrorState);
-    }
-  };
+    },
+    [currentProfile, profiles, refillQueue],
+  );
 
-  return { state, currentProfile, handleSwipe };
+  const undoLast = useCallback(() => {
+    const last = lastSwipes.current.pop();
+    if (!last) return;
+    setProfiles((prev) => [last.profile, ...prev]);
+
+    setState({
+      status: "IDLE",
+      currentProfile: last.profile,
+    } as IdleState);
+  }, []);
+
+  return {
+    state,
+    currentProfile,
+    profiles,
+    handleSwipe,
+    reload,
+    shuffle,
+    undoLast,
+  };
 }

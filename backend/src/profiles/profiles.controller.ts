@@ -1,47 +1,58 @@
-import { Controller, Get, Post, Body, UseGuards, Req } from '@nestjs/common';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard';
-import type { AuthenticatedRequest } from '../guards/jwt-auth.guard';
+import { Controller, Get, Post, Body, Query } from '@nestjs/common';
 import { ProfilesService } from './profiles.service';
-import type { SetupProfileData } from './types/setup-profile';
-import type { UpdateProfileData } from './types/update-profile';
-import { S3Service } from '../s3/s3.service';
-import { ProfileGuard } from '../guards/profile.guard';
+import { FirebaseUser } from '../auth/firebase/firebase-user.decorator';
+import { SetupProfileDto } from './dto/setup-profile.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Controller('profiles')
 export class ProfilesController {
-  constructor(
-    private readonly profilesService: ProfilesService,
-    private readonly s3Service: S3Service,
-  ) {}
+  constructor(private readonly profiles: ProfilesService) {}
 
-  @UseGuards(JwtAuthGuard)
   @Get('status')
-  getStatus(@Req() req: AuthenticatedRequest) {
-    return this.profilesService.checkProfileCompletion(req.user.uid);
+  async status(@FirebaseUser() user: { uid: string }) {
+    return this.profiles.checkStatus(user.uid);
   }
 
-  @UseGuards(JwtAuthGuard, ProfileGuard)
-  @Get('queue')
-  getQueue(@Req() req: AuthenticatedRequest) {
-    return this.profilesService.getQueue(req.user.uid);
+  @Get('upload-url')
+  async upload(@Query('fileType') fileType: string) {
+    return this.profiles.createUploadUrl(fileType);
   }
 
-  @UseGuards(JwtAuthGuard, ProfileGuard)
   @Post('setup')
-  setup(@Req() req: AuthenticatedRequest, @Body() body: SetupProfileData) {
-    return this.profilesService.setupProfile(req.user.uid, body);
+  async setup(
+    @FirebaseUser() user: { uid: string },
+    @Body() dto: SetupProfileDto,
+  ) {
+    return this.profiles.setup(user.uid, dto);
   }
 
-  @UseGuards(JwtAuthGuard, ProfileGuard)
+  @Get('queue')
+  async queue(@FirebaseUser() user: { uid: string }) {
+    return this.profiles.getSwipeQueue(user.uid);
+  }
+
+  @Get('me')
+  async me(@FirebaseUser() user: { uid: string }) {
+    return this.profiles.getProfile(user.uid);
+  }
+
   @Post('update')
-  update(@Req() req: AuthenticatedRequest, @Body() body: UpdateProfileData) {
-    return this.profilesService.updateProfile(req.user.uid, body);
-  }
+  async update(
+    @FirebaseUser() user: { uid: string },
+    @Body() body: UpdateProfileDto,
+  ) {
+    if (body.interestedInSex !== undefined) {
+      if (
+        body.interestedInSex === 'male' ||
+        body.interestedInSex === 'female' ||
+        body.interestedInSex === 'everyone'
+      ) {
+        body.sexPreference = body.interestedInSex;
+      }
 
-  @UseGuards(JwtAuthGuard, ProfileGuard)
-  @Post('upload-url')
-  getUploadUrl(@Req() req: AuthenticatedRequest) {
-    const key = `users/${req.user.uid}/${Date.now()}.jpg`;
-    return this.s3Service.createUploadUrl(key);
+      delete body.interestedInSex;
+    }
+
+    return this.profiles.updateProfile(user.uid, body);
   }
 }

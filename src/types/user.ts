@@ -1,33 +1,51 @@
 // app/types/user.ts
+export type Sex = "male" | "female";
+export type SexPreference = "male" | "female" | "everyone";
 
-// Basic User Profile Structure
+export interface UserLocation {
+  latitude: number;
+  longitude: number;
+}
+
+export type DatingPreference =
+  | "hookups"
+  | "situationship"
+  | "short_term_relationship"
+  | "short_term_open"
+  | "long_term_open"
+  | "long_term_relationship";
+
 export interface UserProfile {
-    readonly id: string,
-    name: string,
-    age: number,
-    bio?: string,
-    interests: string[],
-    profileImageUrl: string,
-    location: {
-        city: string,
-        distanceMiles: number,
-    }
+  id: string;
+  name: string;
+  age: number;
+  bio: string;
+  sex: Sex;
+  sexPreference: SexPreference;
+  interests: string[];
+  photos: string[];
+  profileImageUrl: string;
+  latitude: number;
+  longitude: number;
+  datingPreference: DatingPreference;
 }
 
-// Our Three Possible Swipe Actions
-export type SwipeAction = 'LIKE' | 'SKIP' | 'SUPER_LIKE';
+export type SwipeAction = "LIKE" | "SKIP";
 
-// Basic Message Structure
 export interface Message {
-    readonly id: string,
-    senderId: string,
-    content: string,
-    timestamp: Date,
+  id: string;
+  senderId: string;
+  text: string;
+  imageUrl: string | null;
+  createdAt: string;
 }
 
-// Basic Match Structure
 export interface Match {
-    readonly id: string,
-    matchedAt: Date,
-    otherUser: Pick<UserProfile, 'id' | 'name' | 'profileImageUrl'>,
+  id: string;
+  createdAt: string;
+  otherUser: {
+    id: string;
+    name: string;
+    profileImageUrl: string;
+  };
 }

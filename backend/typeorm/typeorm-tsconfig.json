@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "module": "CommonJS",
+    "target": "ES2021",
+    "moduleResolution": "node",
+    "outDir": "dist/typeorm",
+
+    "esModuleInterop": true,
+    "strict": false,
+    "skipLibCheck": true,
+
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "include": ["typeorm-cli.ts", "src/database/**/*.ts"]
+}

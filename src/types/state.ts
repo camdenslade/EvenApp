@@ -1,31 +1,40 @@
 // app/types/state.ts
-import  { UserProfile, Match } from "./user";
+import { UserProfile } from "./user";
 
-// Define Our Idle State
 export interface IdleState {
-    status: 'IDLE',
-    currentProfile: UserProfile | null,
+  status: "IDLE";
+  currentProfile: UserProfile | null;
 }
 
-// Define Our Loading State
 export interface LoadingState {
-    status: 'LOADING',
-    targetProfileId: string,
+  status: "LOADING";
+  targetProfileId: string;
 }
 
-// Define Our Error State
 export interface ErrorState {
-    status: 'ERROR',
-    errorMessage: string,
-    targetProfileId: string,
+  status: "ERROR";
+  errorMessage: string;
+  targetProfileId: string;
 }
 
-// Define Our Match Found State
 export interface MatchFoundState {
-    status: 'MATCH_FOUND',
-    newMatch: Match,
-    targetProfileId: string,
+  status: "MATCH_FOUND";
+  matchId: string;
+  targetProfile: UserProfile;
+  mePhoto?: string | null;
+  themPhoto?: string | null;
 }
 
-// Export Final Swipe State Type
-export type SwipeState = IdleState | LoadingState | ErrorState | MatchFoundState;
+export interface MessageSentState {
+  status: "MESSAGE_SENT";
+  matchId: string;
+  threadId: string;
+  targetProfile: UserProfile;
+}
+
+export type SwipeState =
+  | IdleState
+  | LoadingState
+  | ErrorState
+  | MatchFoundState
+  | MessageSentState;
