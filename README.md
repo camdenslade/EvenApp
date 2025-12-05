@@ -12,11 +12,12 @@ Even Dating is a modern cross-platform (iOS coming soon + Android) mobile applic
 - Persistent login with encrypted local storage
 
 ## Full Profile Setup
-- A Tinder-style, step-by-step onboarding experience:
-= First name & last name
+- A Tinder-style, step-by-step onboarding
+- Name input
 - Birthday (month/day/year wheel picker)
 - Sex selection
 - Interest selection (multi-select chips)
+- Dating preference selection
 - Photo gallery upload (up to 6 photos)
 - Automatic S3 signed URL uploads
 - Profile completion guard (backend-enforced)
@@ -34,11 +35,10 @@ Even Dating is a modern cross-platform (iOS coming soon + Android) mobile applic
 
 ## Backend Infrastructure
 - Powered by NestJS + Firebase Admin + AWS S3:
-- Complete auth flow with JWT refresh
 - Secure profile API routes
 - S3 upload URL generation
 - ProfileGuard enforcement
-- Firestore user database schema
+- Postgres user database schema
 - Analytics-safe & scalable
 
 # Tech Stack
@@ -50,6 +50,6 @@ Even Dating is a modern cross-platform (iOS coming soon + Android) mobile applic
 ## Backend
 - NestJS
 - Firebase Admin SDK
-- Firestore
+- Postgres
 - AWS S3 (Signed URLs)
-- JWT Access/Refresh Tokens
+- 
