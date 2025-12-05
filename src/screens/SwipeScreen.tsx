@@ -7,6 +7,7 @@ import SwipeDeck from "../components/SwipeDeck";
 import { BottomButtons } from "../components/BottomButtons";
 import { BottomNavBar } from "../components/BottomNavBar";
 import { MatchModal } from "../components/MatchModal";
+import { useLocation } from "../hooks/useLocation";
 
 export default function SwipeScreen({ navigation }: any) {
   const {
@@ -18,10 +19,28 @@ export default function SwipeScreen({ navigation }: any) {
     shuffle,
   } = useSwipeQueue();
 
+  const { requireLocation } = useLocation();
+
   const interactionDisabled = state.status !== "IDLE";
 
   const [matchOpen, setMatchOpen] = useState(false);
   const [matchPhotos, setMatchPhotos] = useState({ me: "", them: "" });
+
+  const [locationReady, setLocationReady] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const loc = await requireLocation();
+
+      if (!loc.latitude || !loc.longitude) {
+        console.warn("Location unavailable — swipe queue disabled.");
+        setLocationReady(false);
+        return;
+      }
+
+      setLocationReady(true);
+    })();
+  }, [requireLocation]);
 
   useEffect(() => {
     if (state.status === "MATCH_FOUND") {
@@ -33,7 +52,6 @@ export default function SwipeScreen({ navigation }: any) {
     }
   }, [state]);
 
-
   const onSwipeLeft = useCallback(() => handleSwipe("SKIP"), [handleSwipe]);
   const onSwipeRight = useCallback(() => handleSwipe("SKIP"), [handleSwipe]);
   const onMessagePress = useCallback(() => {
@@ -43,7 +61,18 @@ export default function SwipeScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <View style={styles.deckWrapper}>
-        {currentProfile ? (
+        {!locationReady ? (
+          <View style={styles.centerBox}>
+            <Text style={styles.emptyTitle}>Enable Location</Text>
+            <Text style={styles.emptySubtitle}>
+              Location is required to find nearby people.
+            </Text>
+
+            <TouchableOpacity style={styles.actionBtn} onPress={requireLocation}>
+              <Text style={styles.actionText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : currentProfile ? (
           <SwipeDeck
             profiles={profiles}
             onSwipeLeft={onSwipeLeft}
@@ -64,7 +93,7 @@ export default function SwipeScreen({ navigation }: any) {
       </View>
 
       <BottomButtons
-        disabled={interactionDisabled}
+        disabled={interactionDisabled || !locationReady}
         onUndo={undoLast}
         onLike={() => handleSwipe("LIKE")}
         onMessage={onMessagePress}

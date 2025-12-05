@@ -7,47 +7,55 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
 } from "react-native";
+
 import { BottomNavBar } from "../../components/BottomNavBar";
 import { apiGet } from "../../services/apiService";
 
-interface MatchRow {
+interface UnmessagedMatch {
   threadId: string;
-  otherUser: {
-    id: string;
+  user: {
+    uid: string;
     name: string;
-    profileImageUrl: string | null;
+    photoUrl: string | null;
   };
   matchedAt: number;
 }
 
 export default function MatchesScreen({ navigation }: any) {
-  const [matches, setMatches] = useState<MatchRow[]>([]);
+  const [matches, setMatches] = useState<UnmessagedMatch[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadMatches() {
+    async function load() {
       try {
-        const data = await apiGet<MatchRow[]>("/matches/me");
-        if (data) setMatches(data);
-      } catch (error) {
-        console.error("Failed to load matches:", error);
+        const data = await apiGet<UnmessagedMatch[]>("/matches/unmessaged");
+        if (Array.isArray(data)) setMatches(data);
+      } catch (err) {
+        console.error("Failed to load matches:", err);
       } finally {
         setLoading(false);
       }
     }
-    loadMatches();
+    load();
   }, []);
 
   return (
     <View style={styles.container}>
       <Text style={styles.header}>Matches</Text>
 
-      <ScrollView style={{ flex: 1 }}>
-        {!loading && matches.length === 0 && (
-          <Text style={styles.placeholder}>You don't have any matches yet.</Text>
-        )}
+      {loading && (
+        <ActivityIndicator size="large" color="#fff" style={{ marginTop: 40 }} />
+      )}
 
+      {!loading && matches.length === 0 && (
+        <Text style={styles.placeholder}>
+          You don't have any new matches yet.
+        </Text>
+      )}
+
+      <ScrollView style={{ flex: 1 }}>
         {matches.map((m) => (
           <TouchableOpacity
             key={m.threadId}
@@ -55,24 +63,20 @@ export default function MatchesScreen({ navigation }: any) {
             onPress={() =>
               navigation.navigate("Chat", {
                 threadId: m.threadId,
-                targetId: m.otherUser.id,
+                targetId: m.user.uid,
               })
             }
           >
             <Image
               source={{
-                uri:
-                  m.otherUser.profileImageUrl ||
-                  "https://via.placeholder.com/100",
+                uri: m.user.photoUrl || "https://via.placeholder.com/100",
               }}
               style={styles.avatar}
             />
 
             <View style={styles.textCol}>
-              <Text style={styles.name}>{m.otherUser.name}</Text>
-              <Text style={styles.lastMsg} numberOfLines={1}>
-                Tap to start chatting
-              </Text>
+              <Text style={styles.name}>{m.user.name}</Text>
+              <Text style={styles.sub}>Tap to start chatting</Text>
             </View>
           </TouchableOpacity>
         ))}
@@ -84,29 +88,50 @@ export default function MatchesScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#222222", padding: 20 },
+  container: { flex: 1, backgroundColor: "#222", padding: 20 },
+
   header: {
     color: "white",
     fontSize: 32,
     fontWeight: "bold",
     marginBottom: 20,
+    marginTop: 50,
   },
+
   placeholder: {
     color: "#aaa",
     fontSize: 18,
     textAlign: "center",
     marginTop: 40,
   },
+
   row: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 16,
     backgroundColor: "#111",
-    padding: 12,
+    padding: 14,
     borderRadius: 12,
   },
-  avatar: { width: 60, height: 60, borderRadius: 30, marginRight: 12 },
+
+  avatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 12,
+  },
+
   textCol: { flex: 1 },
-  name: { color: "white", fontSize: 18, fontWeight: "600" },
-  lastMsg: { color: "#aaa", marginTop: 4, fontSize: 14 },
+
+  name: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "600",
+  },
+
+  sub: {
+    color: "#aaa",
+    marginTop: 4,
+    fontSize: 14,
+  },
 });

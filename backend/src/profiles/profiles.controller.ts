@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body } from '@nestjs/common';
 import { ProfilesService } from './profiles.service';
 import { FirebaseUser } from '../auth/firebase/firebase-user.decorator';
 import { SetupProfileDto } from './dto/setup-profile.dto';
@@ -14,8 +14,8 @@ export class ProfilesController {
   }
 
   @Get('upload-url')
-  async upload(@Query('fileType') fileType: string) {
-    return this.profiles.createUploadUrl(fileType);
+  async upload() {
+    return this.profiles.createUploadUrl();
   }
 
   @Post('setup')
@@ -41,16 +41,25 @@ export class ProfilesController {
     @FirebaseUser() user: { uid: string },
     @Body() body: UpdateProfileDto,
   ) {
-    if (body.interestedInSex !== undefined) {
-      if (
-        body.interestedInSex === 'male' ||
-        body.interestedInSex === 'female' ||
-        body.interestedInSex === 'everyone'
-      ) {
-        body.sexPreference = body.interestedInSex;
-      }
+    if (
+      body.sexPreference &&
+      !['male', 'female', 'everyone'].includes(body.sexPreference)
+    ) {
+      delete body.sexPreference;
+    }
 
-      delete body.interestedInSex;
+    if (
+      body.datingPreference &&
+      ![
+        'hookups',
+        'situationship',
+        'short_term_relationship',
+        'short_term_open',
+        'long_term_open',
+        'long_term_relationship',
+      ].includes(body.datingPreference)
+    ) {
+      delete body.datingPreference;
     }
 
     return this.profiles.updateProfile(user.uid, body);

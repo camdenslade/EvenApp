@@ -41,7 +41,8 @@
     },
     "plugins": [
       "expo-facebook",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-firebase-core"
     ],
     "extra": {
       "eas": {

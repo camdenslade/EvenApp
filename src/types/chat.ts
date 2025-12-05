@@ -1,7 +1,6 @@
 // src/types/chat.ts
-
 export interface MatchUser {
-  id: string;
+  uid: string;
   name: string;
   profileImageUrl: string;
 }
@@ -14,7 +13,7 @@ export interface MatchThread {
 }
 
 export interface ChatMessage {
-  id: string;
+  uid: string;
   threadId: string;
   senderId: string;
   text: string | null;

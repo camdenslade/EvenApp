@@ -1,3 +1,4 @@
+// src/screen/messages/ChatScreen.tsx
 import { useState, useEffect } from "react";
 import {
   View,
@@ -12,9 +13,10 @@ import { useChatThread } from "../../hooks/useChatThread";
 import { getSocket } from "../../services/socket";
 import { auth } from "../../services/firebase";
 
-export default function ChatScreen({ route }: any) {
+export default function ChatScreen({ route, navigation }: any) {
   const { threadId, targetId } = route.params;
-  const { messages } = useChatThread(threadId);
+
+  const { messages, sendMessage } = useChatThread(threadId);
 
   const [uid, setUid] = useState<string | null>(null);
   const [text, setText] = useState("");
@@ -24,18 +26,26 @@ export default function ChatScreen({ route }: any) {
     if (user) setUid(user.uid);
   }, []);
 
-  const send = () => {
-    if (!text.trim() || !targetId) return;
-
+  // JOIN THREAD ROOM
+  useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
 
-    socket.emit("sendMessage", {
-      threadId,
-      targetId,
-      text,
-    });
+    socket.emit("joinThread", { threadId });
 
+    return () => {
+      socket.emit("leaveThread", { threadId });
+    };
+  }, [threadId]);
+
+  const writeReview = () => {
+    navigation.navigate("ReviewWrite", { targetId });
+  };
+
+  const send = () => {
+    if (!text.trim()) return;
+
+    sendMessage(text.trim());
     setText("");
   };
 
@@ -55,7 +65,7 @@ export default function ChatScreen({ route }: any) {
         ]}
       >
         <Text style={{ color: isMine ? "white" : "black" }}>
-          {item.text ?? "[image]"}
+          {item.content ?? "[no content]"}
         </Text>
       </View>
     );
@@ -63,11 +73,17 @@ export default function ChatScreen({ route }: any) {
 
   return (
     <View style={styles.container}>
+      {targetId && (
+        <TouchableOpacity style={styles.reviewButton} onPress={writeReview}>
+          <Text style={styles.reviewButtonText}>Review</Text>
+        </TouchableOpacity>
+      )}
+
       <FlatList
         data={messages}
-        keyExtractor={(m) => m.id}
+        keyExtractor={(m) => m.uid}
         renderItem={renderMessage}
-        contentContainerStyle={{ paddingBottom: 80 }}
+        contentContainerStyle={{ paddingBottom: 80, paddingTop: 50 }}
       />
 
       <View style={styles.inputBar}>
@@ -80,7 +96,7 @@ export default function ChatScreen({ route }: any) {
         />
 
         <TouchableOpacity onPress={send} style={styles.sendBtn}>
-          <Text style={{ color: "white", fontWeight: "bold" }}>Send</Text>
+          <Text style={{ color: "black", fontWeight: "bold" }}>Send</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -89,6 +105,22 @@ export default function ChatScreen({ route }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#222", padding: 20 },
+
+  reviewButton: {
+    position: "absolute",
+    top: 10,
+    right: 20,
+    backgroundColor: "white",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    zIndex: 10,
+  },
+  reviewButtonText: {
+    color: "black",
+    fontWeight: "700",
+    fontSize: 14,
+  },
 
   messageBubble: {
     padding: 10,
@@ -116,7 +148,7 @@ const styles = StyleSheet.create({
   },
 
   sendBtn: {
-    backgroundColor: "#6a0dad",
+    backgroundColor: "white",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 10,

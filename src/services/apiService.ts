@@ -1,8 +1,6 @@
-import { Platform } from "react-native";
 import { auth } from "../services/firebase";
 
 const LOCAL_IP = "192.168.0.88";
-
 const BASE_URL = `http://${LOCAL_IP}:3000/api`;
 
 async function getFirebaseToken() {
@@ -18,8 +16,10 @@ export async function apiRequest<T>(
   try {
     const idToken = await getFirebaseToken();
 
+    const isJson = options.method && options.method !== "GET";
+
     const headers: Record<string, string> = {
-      "Content-Type": "application/json",
+      ...(isJson ? { "Content-Type": "application/json" } : {}),
       ...(options.headers as Record<string, string>),
       ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
     };

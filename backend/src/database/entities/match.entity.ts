@@ -18,4 +18,7 @@ export class Match {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  firstMessageAt: Date | null;
 }

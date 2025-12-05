@@ -1,4 +1,3 @@
-// app/types/user.ts
 export type Sex = "male" | "female";
 export type SexPreference = "male" | "female" | "everyone";
 
@@ -18,6 +17,7 @@ export type DatingPreference =
 export interface UserProfile {
   id: string;
   name: string;
+  birthday: string;
   age: number;
   bio: string;
   sex: Sex;

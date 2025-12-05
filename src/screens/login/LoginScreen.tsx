@@ -102,6 +102,11 @@ export default function LoginScreen(): React.ReactElement {
           textColor="black"
         />
 
+        <PrimaryActionButton
+          title="Search Nearby"
+          onPress={() => navigation.navigate("Search")}
+        />
+
         <TouchableOpacity style={styles.troubleButton}>
           <Text style={styles.troubleText}>Trouble signing in?</Text>
         </TouchableOpacity>
@@ -139,11 +144,18 @@ export default function LoginScreen(): React.ReactElement {
         inverted
       />
 
+      <PrimaryActionButton
+        title="Search Nearby"
+        onPress={() => navigation.navigate("Search")}
+        inverted
+      />
+
       <TouchableOpacity style={styles.troubleButton}>
         <Text style={styles.troubleText}>Trouble signing in?</Text>
       </TouchableOpacity>
     </View>
   );
+
 }
 
 const styles = StyleSheet.create({

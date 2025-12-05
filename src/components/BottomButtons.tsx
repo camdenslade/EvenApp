@@ -79,7 +79,7 @@ export function BottomButtons({ disabled, onUndo, onLike, onMessage }: Props) {
 
       <TouchableOpacity
         disabled={disabled}
-        style={styles.btn}
+        style={styles.centerBtn}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
       >
@@ -113,17 +113,36 @@ const styles = StyleSheet.create({
     justifyContent: "space-evenly",
     alignItems: "center",
   },
+
   btn: {
-    padding: 10,
+    backgroundColor: "black",
+    padding: 13,
+    borderRadius: 999,
+    justifyContent: "center",
+    alignItems: "center",
   },
+
+  centerBtn: {
+    backgroundColor: "black",
+    padding: 20,
+    borderRadius: 999,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
   icon: {
-    width: 60,
-    height: 60,
+    width: 40,
+    height: 40,
     resizeMode: "contain",
+    tintColor: "#fff",
   },
+
   logoIcon: {
-    width: 85,
-    height: 85,
+    width: 70,
+    height: 70,
     resizeMode: "contain",
+    tintColor: "#fff",
   },
 });
+
+

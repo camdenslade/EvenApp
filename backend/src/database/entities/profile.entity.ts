@@ -24,8 +24,8 @@ export class Profile {
   @Column()
   name: string;
 
-  @Column({ type: 'int' })
-  age: number;
+  @Column({ type: 'date' })
+  birthday: string;
 
   @Column()
   bio: string;
@@ -41,6 +41,15 @@ export class Profile {
 
   @Column('text', { array: true })
   photos: string[];
+
+  @Column({ type: 'varchar' })
+  datingPreference:
+    | 'hookups'
+    | 'situationship'
+    | 'short_term_relationship'
+    | 'short_term_open'
+    | 'long_term_open'
+    | 'long_term_relationship';
 
   @CreateDateColumn()
   createdAt: Date;

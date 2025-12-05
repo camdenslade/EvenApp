@@ -4,8 +4,7 @@ import {
   ScrollView,
   Text,
   StyleSheet,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
+  TouchableOpacity
 } from "react-native";
 
 export interface BirthdayValue {
@@ -33,70 +32,62 @@ export function BirthdayPicker({ value, onChange }: BirthdayPickerProps) {
   const daysInMonth = new Date(value.year, value.month + 1, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-  const onScrollEnd = (
-    e: NativeSyntheticEvent<NativeScrollEvent>,
-    type: "month" | "day" | "year"
-  ) => {
-    const index = Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT);
-
-    if (type === "month") {
-      onChange({ ...value, month: index });
-    }
-    if (type === "day") {
-      onChange({ ...value, day: index + 1 });
-    }
-    if (type === "year") {
-      onChange({ ...value, year: years[index] });
-    }
-  };
-
   return (
     <View style={styles.container}>
-      <ScrollView
-        style={styles.column}
-        snapToInterval={ITEM_HEIGHT}
-        decelerationRate="fast"
-        showsVerticalScrollIndicator={false}
-        onMomentumScrollEnd={(e) => onScrollEnd(e, "month")}
-      >
+      <ScrollView style={styles.column} showsVerticalScrollIndicator={false}>
         {months.map((m, idx) => (
-          <View key={idx} style={styles.item}>
-            <Text style={[styles.itemText, value.month === idx && styles.selected]}>
+          <TouchableOpacity
+            key={idx}
+            style={styles.item}
+            onPress={() => onChange({ ...value, month: idx })}
+          >
+            <Text
+              style={[
+                styles.itemText,
+                value.month === idx && styles.selected,
+              ]}
+            >
               {m}
             </Text>
-          </View>
+          </TouchableOpacity>
         ))}
       </ScrollView>
 
-      <ScrollView
-        style={styles.column}
-        snapToInterval={ITEM_HEIGHT}
-        decelerationRate="fast"
-        showsVerticalScrollIndicator={false}
-        onMomentumScrollEnd={(e) => onScrollEnd(e, "day")}
-      >
+      <ScrollView style={styles.column} showsVerticalScrollIndicator={false}>
         {days.map((d) => (
-          <View key={d} style={styles.item}>
-            <Text style={[styles.itemText, value.day === d && styles.selected]}>
+          <TouchableOpacity
+            key={d}
+            style={styles.item}
+            onPress={() => onChange({ ...value, day: d })}
+          >
+            <Text
+              style={[
+                styles.itemText,
+                value.day === d && styles.selected,
+              ]}
+            >
               {d}
             </Text>
-          </View>
+          </TouchableOpacity>
         ))}
       </ScrollView>
 
-      <ScrollView
-        style={styles.column}
-        snapToInterval={ITEM_HEIGHT}
-        decelerationRate="fast"
-        showsVerticalScrollIndicator={false}
-        onMomentumScrollEnd={(e) => onScrollEnd(e, "year")}
-      >
+      <ScrollView style={styles.column} showsVerticalScrollIndicator={false}>
         {years.map((y) => (
-          <View key={y} style={styles.item}>
-            <Text style={[styles.itemText, value.year === y && styles.selected]}>
+          <TouchableOpacity
+            key={y}
+            style={styles.item}
+            onPress={() => onChange({ ...value, year: y })}
+          >
+            <Text
+              style={[
+                styles.itemText,
+                value.year === y && styles.selected,
+              ]}
+            >
               {y}
             </Text>
-          </View>
+          </TouchableOpacity>
         ))}
       </ScrollView>
     </View>

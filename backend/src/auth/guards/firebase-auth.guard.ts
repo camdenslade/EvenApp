@@ -8,12 +8,20 @@ import {
 import * as admin from 'firebase-admin';
 import { Request } from 'express';
 
+interface AuthenticatedRequest extends Request {
+  user?: {
+    uid: string;
+    email: string | null;
+    phone: string | null;
+  };
+}
+
 @Injectable()
 export class FirebaseAuthGuard implements CanActivate {
   constructor(@Inject('FIREBASE_ADMIN') private firebase: typeof admin) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const req: Request = context.switchToHttp().getRequest();
+    const req: AuthenticatedRequest = context.switchToHttp().getRequest();
     const header = req.headers.authorization;
 
     if (!header || !header.startsWith('Bearer '))

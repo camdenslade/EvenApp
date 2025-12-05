@@ -1,9 +1,7 @@
 import {
-  IsInt,
+  IsDateString,
   IsString,
   IsOptional,
-  Min,
-  Max,
   IsArray,
   IsIn,
 } from 'class-validator';
@@ -14,10 +12,8 @@ export class UpdateProfileDto {
   name?: string;
 
   @IsOptional()
-  @IsInt()
-  @Min(18)
-  @Max(99)
-  age?: number;
+  @IsDateString()
+  birthday?: string;
 
   @IsOptional()
   @IsString()
@@ -32,14 +28,27 @@ export class UpdateProfileDto {
   sexPreference?: 'male' | 'female' | 'everyone';
 
   @IsOptional()
+  @IsIn([
+    'hookups',
+    'situationship',
+    'short_term_relationship',
+    'short_term_open',
+    'long_term_open',
+    'long_term_relationship',
+  ])
+  datingPreference?:
+    | 'hookups'
+    | 'situationship'
+    | 'short_term_relationship'
+    | 'short_term_open'
+    | 'long_term_open'
+    | 'long_term_relationship';
+
+  @IsOptional()
   @IsArray()
   interests?: string[];
 
   @IsOptional()
   @IsArray()
   photos?: string[];
-
-  @IsOptional()
-  @IsString()
-  interestedInSex?: string;
 }

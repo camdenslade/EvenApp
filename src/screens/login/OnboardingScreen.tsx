@@ -13,15 +13,10 @@ import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { apiGet, apiPost } from "../../services/apiService";
 import { BirthdayPicker } from "../../components/BirthdayPicker";
-
-const interestsList = [
-  "Photography", "Shopping", "Karaoke", "Yoga", "Cooking",
-  "Tennis", "Run", "Swimming", "Art", "Traveling",
-  "Extreme", "Music", "Drink", "Video games",
-];
+import { INTERESTS } from "../../constants/interests";
 
 export default function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6 | 7>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
 
   const [name, setName] = useState("");
 
@@ -33,7 +28,7 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
   });
 
   const [sex, setSex] = useState<"male" | "female" | null>(null);
-  const [interestedInSex, setInterestedInSex] = useState<
+  const [sexPreference, setSexPreference] = useState<
     "male" | "female" | "everyone" | null
   >(null);
 
@@ -44,7 +39,8 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
     | "short_term_open"
     | "long_term_open"
     | "long_term_relationship"
-  >("short_term_relationship");
+    | null
+  >(null);
 
   const [interests, setInterests] = useState<string[]>([]);
   const [bio, setBio] = useState("");
@@ -53,13 +49,18 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
   ]);
 
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
-  async function compress(uri: string): Promise<string> {
-    const resized = await manipulateAsync(uri, [{ resize: { width: 1080 } }], {
-      compress: 0.7,
-      format: SaveFormat.JPEG,
-    });
-    return resized.uri;
+  async function compressToJpeg(uri: string): Promise<string> {
+    const result = await manipulateAsync(
+      uri,
+      [{ resize: { width: 1080 } }],
+      {
+        compress: 0.7,
+        format: SaveFormat.JPEG,
+      }
+    );
+    return result.uri;
   }
 
   async function pickPhoto(index: number) {
@@ -70,11 +71,11 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
 
     if (res.canceled) return;
 
-    const uri = await compress(res.assets[0].uri);
+    const jpegUri = await compressToJpeg(res.assets[0].uri);
 
     setPhotos((prev) => {
       const updated = [...prev];
-      updated[index] = uri;
+      updated[index] = jpegUri;
       return updated;
     });
   }
@@ -92,7 +93,7 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
       setError("Select your sex.");
       return;
     }
-    if (!interestedInSex) {
+    if (!sexPreference) {
       setError("Select who you're interested in.");
       return;
     }
@@ -108,11 +109,11 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
     for (const uri of realPhotos) {
       if (!uri) continue;
 
-      const signed = await apiGet<{ uploadUrl: string; fileUrl: string }>(
-        "/profiles/upload-url?fileType=image/jpeg"
+      const signed = await apiGet<{ uploadUrl: string; fileUrl: string; error?: string }>(
+        `/profiles/upload-url?fileType=image/jpeg`
       );
 
-      if (!signed) {
+      if (!signed || signed.error) {
         setError("Photo upload failed.");
         return;
       }
@@ -128,21 +129,20 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
       uploadedUrls.push(signed.fileUrl);
     }
 
-    const today = new Date();
-    const birth = new Date(birthday.year, birthday.month, birthday.day);
-
-    let age = today.getFullYear() - birth.getFullYear();
-    const mdiff = today.getMonth() - birth.getMonth();
-    if (mdiff < 0 || (mdiff === 0 && today.getDate() < birth.getDate())) {
-      age--;
-    }
+    const birthDateISO = new Date(
+      birthday.year,
+      birthday.month,
+      birthday.day
+    )
+      .toISOString()
+      .split("T")[0];
 
     const payload = {
       name: name.trim(),
-      age,
+      birthday: birthDateISO,
       bio,
       sex,
-      interestedInSex,
+      sexPreference,
       datingPreference,
       interests,
       photos: uploadedUrls,
@@ -160,35 +160,30 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
   if (step === 1) {
     return (
       <ScrollView style={styles.screen}>
-        <Text style={styles.header}>Welcome! We just need a few things.</Text>
+        <Text style={styles.header}>Tell us about you</Text>
 
         <TextInput
           style={styles.input}
           placeholder="First name"
           placeholderTextColor="#aaa"
           value={name}
-          onChangeText={setName}
+          onChangeText={(text) => {
+            if (text.includes(" ")) {
+              setError("No spaces allowed in your first name.");
+              return;
+            }
+
+            setError(null);
+            setName(text);
+          }}
         />
+
 
         <Text style={styles.label}>Birthday</Text>
 
         <BirthdayPicker value={birthday} onChange={setBirthday} />
 
-        <TouchableOpacity style={styles.mainButton} onPress={() => setStep(2)}>
-          <Text style={styles.mainButtonText}>Continue</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    );
-  }
-
-  if (step === 2) {
-    return (
-      <View style={styles.screen}>
-        <TouchableOpacity style={styles.back} onPress={() => setStep(1)}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.header}>I am</Text>
+        <Text style={styles.label}>I am</Text>
 
         {["male", "female"].map((g) => (
           <TouchableOpacity
@@ -207,17 +202,37 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
           </TouchableOpacity>
         ))}
 
-        <TouchableOpacity style={styles.mainButton} onPress={() => setStep(3)}>
+        <TouchableOpacity
+          style={styles.mainButton}
+          onPress={() => {
+            if (!name.trim()) {
+              setError("Enter a name.");
+              return;
+            }
+            if (name.includes(" ")) {
+              setError("No spaces allowed in your first name.");
+              return;
+            }
+            if (!sex) {
+              setError("Select your sex.");
+              return;
+            }
+            setError(null);
+            setStep(2);
+          }}
+        >
           <Text style={styles.mainButtonText}>Continue</Text>
         </TouchableOpacity>
-      </View>
+
+        {error && <Text style={styles.error}>{error}</Text>}
+      </ScrollView>
     );
   }
 
-  if (step === 3) {
+  if (step === 2) {
     return (
       <View style={styles.screen}>
-        <TouchableOpacity style={styles.back} onPress={() => setStep(2)}>
+        <TouchableOpacity style={styles.back} onPress={() => setStep(1)}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
 
@@ -228,34 +243,34 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
             key={opt}
             style={[
               styles.genderOption,
-              interestedInSex === opt && styles.genderSelected,
+              sexPreference === opt && styles.genderSelected,
             ]}
-            onPress={() => setInterestedInSex(opt as any)}
+            onPress={() => setSexPreference(opt as any)}
           >
             <Text
               style={[
                 styles.genderText,
-                interestedInSex === opt && styles.genderTextSelected,
+                sexPreference === opt && styles.genderTextSelected,
               ]}
             >
-              {opt === "male"
-                ? "Men"
-                : opt === "female"
-                ? "Women"
-                : "Everyone"}
+              {opt === "male" ? "Men" : opt === "female" ? "Women" : "Everyone"}
             </Text>
           </TouchableOpacity>
         ))}
 
-        <TouchableOpacity style={styles.mainButton} onPress={() => setStep(4)}>
+        <TouchableOpacity style={styles.mainButton} onPress={() => setStep(3)}>
           <Text style={styles.mainButtonText}>Continue</Text>
         </TouchableOpacity>
+
+        {error && <Text style={styles.error}>{error}</Text>}
       </View>
     );
   }
 
-  if (step === 4) {
-    const prefs = [
+  if (step === 3) {
+    const age = new Date().getFullYear() - birthday.year;
+
+    const RAW_DATING = [
       { value: "hookups", label: "Hookups" },
       { value: "situationship", label: "Situationship" },
       { value: "short_term_relationship", label: "Short-term Relationship" },
@@ -264,15 +279,27 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
       { value: "long_term_relationship", label: "Long-term Relationship" },
     ];
 
+    const DATING_PREFS =
+      age < 25
+        ? RAW_DATING.filter(
+            (p) => p.value !== "short_term_relationship"
+          )
+        : RAW_DATING.filter((p) => p.value !== "situationship");
+
+    if (!DATING_PREFS.some((p) => p.value === datingPreference)) {
+      const fallback = RAW_DATING.find((p) => p.value === datingPreference);
+      if (fallback) DATING_PREFS.unshift(fallback);
+    }
+
     return (
       <ScrollView style={styles.screen}>
-        <TouchableOpacity style={styles.back} onPress={() => setStep(3)}>
+        <TouchableOpacity style={styles.back} onPress={() => setStep(2)}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
 
         <Text style={styles.header}>Dating preference</Text>
 
-        {prefs.map((p) => (
+        {DATING_PREFS.map((p) => (
           <TouchableOpacity
             key={p.value}
             style={[
@@ -292,24 +319,39 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
           </TouchableOpacity>
         ))}
 
-        <TouchableOpacity style={styles.mainButton} onPress={() => setStep(5)}>
+        <TouchableOpacity style={styles.mainButton} onPress={() => setStep(4)}>
           <Text style={styles.mainButtonText}>Continue</Text>
         </TouchableOpacity>
       </ScrollView>
     );
   }
 
-  if (step === 5) {
+
+  if (step === 4) {
+    const filtered = INTERESTS.filter((i) =>
+      i.toLowerCase().includes(search.toLowerCase())
+    );
+
+    const visible = search.length > 0 ? filtered : filtered.slice(0, 25);
+
     return (
       <ScrollView style={styles.screen}>
-        <TouchableOpacity style={styles.back} onPress={() => setStep(4)}>
+        <TouchableOpacity style={styles.back} onPress={() => setStep(3)}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
 
         <Text style={styles.header}>Your interests</Text>
 
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search interests..."
+          placeholderTextColor="#888"
+          value={search}
+          onChangeText={setSearch}
+        />
+
         <View style={styles.interestGrid}>
-          {interestsList.map((i) => (
+          {visible.map((i) => (
             <TouchableOpacity
               key={i}
               style={[
@@ -330,21 +372,21 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
           ))}
         </View>
 
-        <TouchableOpacity style={styles.mainButton} onPress={() => setStep(6)}>
+        <TouchableOpacity style={styles.mainButton} onPress={() => setStep(5)}>
           <Text style={styles.mainButtonText}>Continue</Text>
         </TouchableOpacity>
       </ScrollView>
     );
   }
 
-  if (step === 6) {
+  if (step === 5) {
     return (
       <ScrollView style={styles.screen}>
-        <TouchableOpacity style={styles.back} onPress={() => setStep(5)}>
+        <TouchableOpacity style={styles.back} onPress={() => setStep(4)}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
 
-        <Text style={styles.header}>Who you are.</Text>
+        <Text style={styles.header}>Who you are</Text>
 
         <TextInput
           style={styles.bioInput}
@@ -355,7 +397,7 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
           multiline
         />
 
-        <TouchableOpacity style={styles.mainButton} onPress={() => setStep(7)}>
+        <TouchableOpacity style={styles.mainButton} onPress={() => setStep(6)}>
           <Text style={styles.mainButtonText}>Continue</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -364,7 +406,7 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
 
   return (
     <ScrollView style={styles.screen}>
-      <TouchableOpacity style={styles.back} onPress={() => setStep(6)}>
+      <TouchableOpacity style={styles.back} onPress={() => setStep(5)}>
         <Text style={styles.backText}>←</Text>
       </TouchableOpacity>
 
@@ -433,7 +475,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#f4f4f4",
     marginBottom: 12,
   },
-  genderSelected: { backgroundColor: "#222" },
+  genderSelected: {
+    backgroundColor: "#222",
+    borderWidth: 2,
+    borderColor: "white",
+  },
   genderText: { fontSize: 18, color: "#444" },
   genderTextSelected: { color: "white" },
 
@@ -475,11 +521,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   label: {
-  fontSize: 18,
-  fontWeight: "500",
-  color: "white",
-  marginTop: 20,
-  marginBottom: 8,
+    fontSize: 18,
+    fontWeight: "500",
+    color: "white",
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  searchInput: {
+    backgroundColor: "#fff",
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 15,
+    fontSize: 16,
+    color: "#000",
   },
   photo: { width: "100%", height: "100%", borderRadius: 10 },
   addPhotoText: { color: "#fff", fontSize: 40, fontWeight: "300" },

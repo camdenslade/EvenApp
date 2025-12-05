@@ -61,14 +61,13 @@ export function BottomNavBar({ navigation, active }: Props) {
         onPress={() => navigation.navigate("Profile")}
         style={styles.btn}
       >
-        <Text
+        <Image
+          source={require("../../assets/icons/profile.png")}
           style={[
-            styles.iconText,
-            active === "profile" && styles.activeText,
+            styles.iconImg,
+            active === "profile" && styles.activeImg,
           ]}
-        >
-          👤
-        </Text>
+        />
       </TouchableOpacity>
 
     </View>
@@ -79,18 +78,22 @@ const styles = StyleSheet.create({
   nav: {
     position: "absolute",
     bottom: 0,
-    width: "100%",
+    left: 0,
+    right: 0,
     flexDirection: "row",
     justifyContent: "space-evenly",
     alignItems: "center",
     paddingVertical: 16,
+    paddingBottom: 20,
     backgroundColor: "#111",
     borderTopWidth: 1,
     borderTopColor: "#333",
   },
 
   btn: {
-    padding: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 30,
   },
 
   iconImg: {

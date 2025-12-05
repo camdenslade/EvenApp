@@ -1,6 +1,13 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Post, Body, Req, UseGuards } from '@nestjs/common';
+
 import { FirebaseUser } from '../auth/firebase/firebase-user.decorator';
+import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { UsersService } from './users.service';
+
+class UpdateLocationDto {
+  latitude: number;
+  longitude: number;
+}
 
 @Controller('users')
 export class UsersController {
@@ -15,12 +22,19 @@ export class UsersController {
       phone: string | null;
     },
   ) {
-    const dbUser = await this.usersService.ensureUserExists(
-      user.uid,
-      user.email,
-      user.phone,
-    );
+    return this.usersService.ensureUserExists(user.uid, user.email, user.phone);
+  }
 
-    return dbUser;
+  @Post('update-location')
+  @UseGuards(FirebaseAuthGuard)
+  async updateLocation(
+    @Req() req: { user: { uid: string } },
+    @Body() body: UpdateLocationDto,
+  ) {
+    return this.usersService.updateLocation(
+      req.user.uid,
+      body.latitude,
+      body.longitude,
+    );
   }
 }

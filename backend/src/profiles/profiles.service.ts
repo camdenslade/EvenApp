@@ -8,6 +8,11 @@ import { UsersService } from '../users/users.service';
 import { S3Service } from '../s3/s3.service';
 import { SetupProfileDto } from './dto/setup-profile.dto';
 
+export interface ProfileResponse extends Profile {
+  profileImageUrl: string | null;
+  age: number;
+}
+
 @Injectable()
 export class ProfilesService {
   constructor(
@@ -21,25 +26,39 @@ export class ProfilesService {
     private readonly s3: S3Service,
   ) {}
 
-  async getProfile(uid: string): Promise<Profile | null> {
-    return this.profilesRepo.findOne({
+  private calculateAge(birthday: string): number {
+    const b = new Date(birthday);
+    const diff = Date.now() - b.getTime();
+    return new Date(diff).getUTCFullYear() - 1970;
+  }
+
+  async getProfile(uid: string): Promise<ProfileResponse | null> {
+    const profile = await this.profilesRepo.findOne({
       where: { userUid: uid },
     });
+
+    if (!profile) return null;
+
+    return {
+      ...profile,
+      profileImageUrl: profile.photos?.[0] ?? null,
+      age: this.calculateAge(profile.birthday),
+    };
   }
 
-  async checkStatus(uid: string): Promise<'missing' | 'complete'> {
+  async checkStatus(uid: string): Promise<{ status: 'missing' | 'complete' }> {
     const p = await this.getProfile(uid);
-    return p ? 'complete' : 'missing';
+    return { status: p ? 'complete' : 'missing' };
   }
 
-  async createUploadUrl(fileType: string) {
-    return this.s3.createUploadUrl(fileType);
+  async createUploadUrl() {
+    return this.s3.createUploadUrl();
   }
 
-  async setup(uid: string, dto: SetupProfileDto): Promise<Profile> {
+  async setup(uid: string, dto: SetupProfileDto): Promise<ProfileResponse> {
     await this.usersService.ensureUserExists(uid, null, null);
 
-    let profile = await this.getProfile(uid);
+    let profile = await this.profilesRepo.findOne({ where: { userUid: uid } });
 
     if (!profile) {
       profile = this.profilesRepo.create({
@@ -50,16 +69,34 @@ export class ProfilesService {
       Object.assign(profile, dto);
     }
 
-    return this.profilesRepo.save(profile);
+    const saved = await this.profilesRepo.save(profile);
+
+    return {
+      ...saved,
+      profileImageUrl: saved.photos?.[0] ?? null,
+      age: this.calculateAge(saved.birthday),
+    };
   }
 
-  async updateProfile(uid: string, data: Partial<Profile>): Promise<Profile> {
-    const profile = await this.getProfile(uid);
+  async updateProfile(
+    uid: string,
+    data: Partial<Profile>,
+  ): Promise<ProfileResponse> {
+    const profile = await this.profilesRepo.findOne({
+      where: { userUid: uid },
+    });
+
     if (!profile) throw new NotFoundException('Profile not found');
 
     Object.assign(profile, data);
 
-    return this.profilesRepo.save(profile);
+    const saved = await this.profilesRepo.save(profile);
+
+    return {
+      ...saved,
+      profileImageUrl: saved.photos?.[0] ?? null,
+      age: this.calculateAge(saved.birthday),
+    };
   }
 
   async getSwipeQueue(uid: string) {
@@ -85,8 +122,12 @@ export class ProfilesService {
       accepted: ['everyone', myProfile.sex],
     });
 
-    query.orderBy('RANDOM()');
+    const results = await query.orderBy('RANDOM()').limit(20).getMany();
 
-    return query.limit(20).getMany();
+    return results.map((p) => ({
+      ...p,
+      profileImageUrl: p.photos?.[0] ?? null,
+      age: this.calculateAge(p.birthday),
+    }));
   }
 }

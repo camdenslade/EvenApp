@@ -115,8 +115,8 @@ export function useSwipeQueue() {
             status: "MATCH_FOUND",
             matchId: result.matchId || swipedProfile.id,
             targetProfile: swipedProfile,
-            mePhoto: swipedProfile.photos?.[0] ?? null,
-            themPhoto: swipedProfile.photos?.[0] ?? null,
+            mePhoto: null,
+            themPhoto: swipedProfile.profileImageUrl ?? null,
           } as MatchFoundState);
 
           if (profiles.length <= 3) refillQueue();

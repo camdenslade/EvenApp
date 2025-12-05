@@ -1,13 +1,11 @@
-import { IsString, IsInt, Min, Max, IsArray, IsIn } from 'class-validator';
+import { IsString, IsArray, IsIn, IsDateString } from 'class-validator';
 
 export class SetupProfileDto {
   @IsString()
   name: string;
 
-  @IsInt()
-  @Min(18)
-  @Max(99)
-  age: number;
+  @IsDateString()
+  birthday: string;
 
   @IsString()
   bio: string;
@@ -17,6 +15,22 @@ export class SetupProfileDto {
 
   @IsIn(['male', 'female', 'everyone'])
   sexPreference: 'male' | 'female' | 'everyone';
+
+  @IsIn([
+    'hookups',
+    'situationship',
+    'short_term_relationship',
+    'short_term_open',
+    'long_term_open',
+    'long_term_relationship',
+  ])
+  datingPreference:
+    | 'hookups'
+    | 'situationship'
+    | 'short_term_relationship'
+    | 'short_term_open'
+    | 'long_term_open'
+    | 'long_term_relationship';
 
   @IsArray()
   interests: string[];
