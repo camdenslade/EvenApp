@@ -1,3 +1,5 @@
+// backend/src/profiles/dto/update-profile.dto.ts
+
 import {
   IsDateString,
   IsString,
@@ -5,6 +7,14 @@ import {
   IsArray,
   IsIn,
 } from 'class-validator';
+
+// ====================================================================
+// # UPDATE PROFILE DTO
+// ====================================================================
+//
+// Allows partial updates to a user's profile.
+// All fields are optional and validated only if present.
+//
 
 export class UpdateProfileDto {
   @IsOptional()

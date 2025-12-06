@@ -1,9 +1,23 @@
+// backend/src/database/entities/swipe.entity.ts
+
 import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
 } from 'typeorm';
+
+// ====================================================================
+// # SWIPE ENTITY
+// ====================================================================
+//
+// Represents a single swipe action:
+//  - swiperUid → the user performing the swipe
+//  - targetUid → the user being swiped on
+//  - direction → 'pass'
+//
+// Used for queue logic, match creation, and analytics.
+//
 
 @Entity('swipes')
 export class Swipe {
@@ -17,7 +31,7 @@ export class Swipe {
   targetUid: string;
 
   @Column()
-  direction: 'like' | 'pass';
+  direction: 'pass';
 
   @CreateDateColumn()
   createdAt: Date;

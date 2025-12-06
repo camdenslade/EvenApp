@@ -1,4 +1,15 @@
+// backend/src/reviews/dto/review-response.dto.ts
+
+// Entities --------------------------------------------------------------
 import { Review } from '../../database/entities/review.entity';
+
+// ====================================================================
+// # REVIEW RESPONSE DTO
+// ====================================================================
+//
+// Standard API response wrapper for a Review entity.
+// Ensures the frontend only receives whitelisted properties.
+//
 
 export class ReviewResponseDto {
   id: string;

@@ -1,4 +1,27 @@
-// src/screen/messages/ChatScreen.tsx
+// src/screens/messages/ChatScreen.tsx
+// ============================================================================
+// ChatScreen
+// Purpose:
+//   • Display and send messages within a specific chat thread
+//   • Automatically receive real-time messages via WebSocket ("newMessage")
+//   • Allow user to send messages via useChatThread()
+//   • Offer a "Review" button to write a review of the chat partner
+//
+// Route Params:
+//   threadId: string       → Which conversation to load
+//   targetId: string       → UID of chat partner (used for review creation)
+//
+// Hooks used:
+//   • useChatThread(threadId) → loads + streams messages, provides sendMessage()
+//   • Firebase auth → identify current user
+//   • socket.io → join and leave rooms for live updates
+//
+// UI Structure:
+//   • Optional Review button (top-right)
+//   • FlatList showing messages (auto-updating)
+//   • Message input bar with Send button
+// ============================================================================
+
 import { useState, useEffect } from "react";
 import {
   View,
@@ -14,19 +37,39 @@ import { getSocket } from "../../services/socket";
 import { auth } from "../../services/firebase";
 
 export default function ChatScreen({ route, navigation }: any) {
+  // Route parameters passed from MatchesScreen or MessagesScreen
   const { threadId, targetId } = route.params;
 
+  // --------------------------------------------------------------------------
+  // useChatThread → Provides:
+  //   • messages[]      → All messages for this thread (auto-updates)
+  //   • sendMessage()   → Push a message through websocket + backend
+  // --------------------------------------------------------------------------
   const { messages, sendMessage } = useChatThread(threadId);
 
+  // Authenticated user's UID (needed to style bubbles correctly)
   const [uid, setUid] = useState<string | null>(null);
+
+  // Local input text for message typing
   const [text, setText] = useState("");
 
+  // --------------------------------------------------------------------------
+  // EFFECT: Retrieve Firebase UID on mount
+  // --------------------------------------------------------------------------
   useEffect(() => {
     const user = auth.currentUser;
     if (user) setUid(user.uid);
   }, []);
 
-  // JOIN THREAD ROOM
+  // --------------------------------------------------------------------------
+  // EFFECT: Join WebSocket thread room on mount, leave on unmount
+  //
+  //   socket.emit("joinThread", { threadId })
+  //   socket.emit("leaveThread", { threadId })
+  //
+  // useChatThread ALSO joins internally, but this ensures redundancy and
+  // helps scenarios where screens remount quickly.
+  // --------------------------------------------------------------------------
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
@@ -38,10 +81,20 @@ export default function ChatScreen({ route, navigation }: any) {
     };
   }, [threadId]);
 
+  // --------------------------------------------------------------------------
+  // Navigate to Review screen
+  // --------------------------------------------------------------------------
   const writeReview = () => {
     navigation.navigate("ReviewWrite", { targetId });
   };
 
+  // --------------------------------------------------------------------------
+  // SEND MESSAGE HANDLER
+  //
+  // - Prevent empty messages
+  // - Send via useChatThread()
+  // - Clear input
+  // --------------------------------------------------------------------------
   const send = () => {
     if (!text.trim()) return;
 
@@ -49,6 +102,14 @@ export default function ChatScreen({ route, navigation }: any) {
     setText("");
   };
 
+  // --------------------------------------------------------------------------
+  // RENDER A MESSAGE BUBBLE
+  //
+  //   item.senderId === uid → bubble on right (purple)
+  //   else                  → bubble on left (gray)
+  //
+  // Backend shape may return senderId or sender.id; handle both.
+  // --------------------------------------------------------------------------
   const renderMessage = ({ item }: any) => {
     const isMine =
       item.senderId === uid ||
@@ -71,14 +132,20 @@ export default function ChatScreen({ route, navigation }: any) {
     );
   };
 
+  // --------------------------------------------------------------------------
+  // MAIN UI
+  // --------------------------------------------------------------------------
   return (
     <View style={styles.container}>
+
+      {/* REVIEW BUTTON (only if targetId was passed into the route) */}
       {targetId && (
         <TouchableOpacity style={styles.reviewButton} onPress={writeReview}>
           <Text style={styles.reviewButtonText}>Review</Text>
         </TouchableOpacity>
       )}
 
+      {/* MESSAGE LIST */}
       <FlatList
         data={messages}
         keyExtractor={(m) => m.uid}
@@ -86,6 +153,7 @@ export default function ChatScreen({ route, navigation }: any) {
         contentContainerStyle={{ paddingBottom: 80, paddingTop: 50 }}
       />
 
+      {/* MESSAGE INPUT BAR */}
       <View style={styles.inputBar}>
         <TextInput
           style={styles.input}
@@ -103,6 +171,9 @@ export default function ChatScreen({ route, navigation }: any) {
   );
 }
 
+// ============================================================================
+// STYLES
+// ============================================================================
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#222", padding: 20 },
 

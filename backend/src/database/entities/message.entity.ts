@@ -1,3 +1,5 @@
+// backend/src/database/entities/message.entity.ts
+
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -6,10 +8,23 @@ import {
   CreateDateColumn,
 } from 'typeorm';
 
+// Entities --------------------------------------------------------------
 import { Thread } from './thread.entity';
 import { User } from './user.entity';
 
-@Entity()
+// ====================================================================
+// # MESSAGE ENTITY
+// ====================================================================
+//
+// Represents a single chat message inside a Thread.
+// Supports both text and optional image messages.
+//
+// Cascades:
+// - Deleting a Thread deletes its Messages
+// - Deleting a User deletes their sent Messages
+//
+
+@Entity('messages')
 export class Message {
   @PrimaryGeneratedColumn('uuid')
   id: string;

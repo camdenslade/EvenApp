@@ -1,3 +1,28 @@
+// src/screens/profile/EditProfileScreen.tsx
+// ============================================================================
+// EditProfileScreen
+//
+// PURPOSE:
+//   Allows the user to update their profile after onboarding.
+//   Supports editing:
+//     • Photos (upload, remove, replace; max 6 slots)
+//     • Bio
+//     • Sex preference (men / women / everyone)
+//     • Dating preferences (age-dependent filtering logic)
+//     • Interests (searchable list)
+//     • Smart Photos toggle (placeholder for future ML feature)
+//
+// PRIMARY DATA FLOW:
+//   1. Load profile from GET /profiles/me
+//   2. Hydrate UI with their existing details
+//   3. Allow edits
+//   4. Upload new photos using signed URLs (PUT to Storage)
+//   5. Submit final payload to POST /profiles/update
+//
+// NOTE:
+//   The API expects a *flattened* array of photos (no nulls), so nulls are removed.
+// ============================================================================
+
 import { useEffect, useState } from "react";
 import {
   View,
@@ -22,8 +47,10 @@ import type {
   DatingPreference,
 } from "../../types/user";
 
+// Sex preferences displayed in UI
 const ALL_PREFS: SexPreference[] = ["male", "female", "everyone"];
 
+// Raw dating preferences available (age-filtered later)
 const RAW_DATING_PREFS: { value: DatingPreference; label: string }[] = [
   { value: "hookups", label: "Hookups Only" },
   { value: "situationship", label: "Situationship" },
@@ -34,14 +61,18 @@ const RAW_DATING_PREFS: { value: DatingPreference; label: string }[] = [
 ];
 
 export default function EditProfileScreen({ navigation }: any) {
+  // ============================================================================
+  // STATE: Loading & error
+  // ============================================================================
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ============================================================================
+  // PROFILE FIELDS
+  // ============================================================================
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
-
   const [age, setAge] = useState<number>(18);
-
   const [sex, setSex] = useState<"male" | "female">("male");
 
   const [sexPreference, setSexPreference] =
@@ -52,21 +83,32 @@ export default function EditProfileScreen({ navigation }: any) {
 
   const [interests, setInterests] = useState<string[]>([]);
 
+  // 6 photo slots (null = empty)
   const [photos, setPhotos] = useState<(string | null)[]>([
     null, null, null,
     null, null, null,
   ]);
 
+  // Smart Photos toggle (for future ML scoring)
   const [smartPhotos, setSmartPhotos] = useState(false);
+
+  // Interest search UI
   const [interestSearch, setInterestSearch] = useState("");
   const [showAllInterests, setShowAllInterests] = useState(false);
-  
+
+  // Display labels for sex preferences
   const SEX_PREF_LABELS: Record<SexPreference, string> = {
     male: "Men",
     female: "Women",
     everyone: "Everyone",
   };
 
+  // ============================================================================
+  // LOAD EXISTING PROFILE DATA
+  //
+  // GET /profiles/me → hydrate all fields
+  // Ensures grid always contains exactly 6 slots
+  // ============================================================================
   useEffect(() => {
     async function load() {
       try {
@@ -81,6 +123,7 @@ export default function EditProfileScreen({ navigation }: any) {
           setDatingPreference(data.datingPreference);
           setInterests(data.interests);
 
+          // Fill 6 photo boxes
           const grid: (string | null)[] = [...data.photos];
           while (grid.length < 6) grid.push(null);
           setPhotos(grid);
@@ -95,6 +138,11 @@ export default function EditProfileScreen({ navigation }: any) {
     load();
   }, []);
 
+  // ============================================================================
+  // IMAGE COMPRESSION
+  // - Reduces file size before uploading
+  // - Width capped at 1080px
+  // ============================================================================
   async function compressToJpeg(uri: string): Promise<string> {
     const result = await manipulateAsync(
       uri,
@@ -105,6 +153,15 @@ export default function EditProfileScreen({ navigation }: any) {
     return result.uri;
   }
 
+  // ============================================================================
+  // SELECT & UPLOAD PHOTO
+  //
+  // Flow:
+  //   1. User picks photo from gallery
+  //   2. Compress locally
+  //   3. Request signed URL → PUT upload
+  //   4. Save final fileUrl in photos[]
+  // ============================================================================
   async function pickPhoto(index: number) {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -114,6 +171,7 @@ export default function EditProfileScreen({ navigation }: any) {
 
     const compressed = await compressToJpeg(res.assets[0].uri);
 
+    // GET signed upload URL
     const signed = await apiGet<{ uploadUrl: string; fileUrl: string }>(
       "/profiles/upload-url?fileType=image/jpeg"
     );
@@ -122,14 +180,15 @@ export default function EditProfileScreen({ navigation }: any) {
       return;
     }
 
+    // Upload file to storage bucket
     const blob = await (await fetch(compressed)).blob();
-
     await fetch(signed.uploadUrl, {
       method: "PUT",
       headers: { "Content-Type": "image/jpeg" },
       body: blob,
     });
 
+    // Store final accessible URL
     setPhotos((prev) => {
       const updated = [...prev];
       updated[index] = signed.fileUrl;
@@ -137,6 +196,7 @@ export default function EditProfileScreen({ navigation }: any) {
     });
   }
 
+  // Removes photo slot at index
   function removePhoto(i: number) {
     setPhotos((prev) => {
       const updated = [...prev];
@@ -145,16 +205,26 @@ export default function EditProfileScreen({ navigation }: any) {
     });
   }
 
+  // Toggles an interest on/off
   function toggleInterest(i: string) {
     setInterests((prev) =>
       prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i]
     );
   }
 
+  // ============================================================================
+  // SAVE PROFILE
+  //
+  // POST /profiles/update
+  //   name, bio, sex, sexPreference, datingPreference, interests, photos[]
+  //
+  // Must remove nulls from photo array.
+  // ============================================================================
   async function save() {
     setError(null);
 
     const realPhotos = photos.filter((p): p is string => p !== null);
+
     if (realPhotos.length < 1) {
       setError("At least one photo required.");
       return;
@@ -178,6 +248,7 @@ export default function EditProfileScreen({ navigation }: any) {
     navigation.goBack();
   }
 
+  // Loading UI
   if (loading) {
     return (
       <View style={styles.loadingWrap}>
@@ -187,33 +258,45 @@ export default function EditProfileScreen({ navigation }: any) {
     );
   }
 
+  // ============================================================================
+  // DATING PREFERENCE FILTERING BY AGE
+  //
+  // • Users < 25 remove “short_term_relationship”
+  // • Users ≥ 25 remove “situationship”
+  //
+  // Also ensures previously saved preference is included even if
+  // it no longer matches filtering rules.
+  // ============================================================================
   let DATING_PREFS =
-  age < 25
-    ? [
-        RAW_DATING_PREFS[0],
-        RAW_DATING_PREFS[1],
-        RAW_DATING_PREFS[3],
-        RAW_DATING_PREFS[4],
-        RAW_DATING_PREFS[5],
-      ]
-    : [
-        RAW_DATING_PREFS[0],
-        RAW_DATING_PREFS[2],
-        RAW_DATING_PREFS[3],
-        RAW_DATING_PREFS[4],
-        RAW_DATING_PREFS[5],
-      ];
-  
-    if (!DATING_PREFS.some((p) => p.value === datingPreference)) {
-      const saved = RAW_DATING_PREFS.find((p) => p.value === datingPreference);
-      if (saved) DATING_PREFS = [saved, ...DATING_PREFS];
-    }
+    age < 25
+      ? [
+          RAW_DATING_PREFS[0],
+          RAW_DATING_PREFS[1],
+          RAW_DATING_PREFS[3],
+          RAW_DATING_PREFS[4],
+          RAW_DATING_PREFS[5],
+        ]
+      : [
+          RAW_DATING_PREFS[0],
+          RAW_DATING_PREFS[2],
+          RAW_DATING_PREFS[3],
+          RAW_DATING_PREFS[4],
+          RAW_DATING_PREFS[5],
+        ];
 
+  if (!DATING_PREFS.some((p) => p.value === datingPreference)) {
+    const saved = RAW_DATING_PREFS.find((p) => p.value === datingPreference);
+    if (saved) DATING_PREFS = [saved, ...DATING_PREFS];
+  }
 
+  // ============================================================================
+  // MAIN UI RENDER
+  // ============================================================================
   return (
     <View style={{ flex: 1, backgroundColor: "#222222" }}>
       <ScrollView contentContainerStyle={styles.container}>
-
+        
+        {/* HEADER */}
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text style={styles.backArrow}>←</Text>
@@ -221,11 +304,13 @@ export default function EditProfileScreen({ navigation }: any) {
           <Text style={styles.headerText}>Edit Profile</Text>
         </View>
 
+        {/* PHOTO GRID */}
         <View style={styles.photoGrid}>
           {photos.map((p, i) => (
             <View key={i} style={styles.photoBox}>
               {p ? (
                 <>
+                  {/* Existing photo */}
                   <Image source={{ uri: p }} style={styles.photo} />
                   <TouchableOpacity
                     style={styles.removeBtn}
@@ -235,6 +320,7 @@ export default function EditProfileScreen({ navigation }: any) {
                   </TouchableOpacity>
                 </>
               ) : (
+                // Empty slot → add photo
                 <TouchableOpacity
                   style={styles.addSlot}
                   onPress={() => pickPhoto(i)}
@@ -246,6 +332,7 @@ export default function EditProfileScreen({ navigation }: any) {
           ))}
         </View>
 
+        {/* ADD PHOTOS BUTTON */}
         <TouchableOpacity
           style={styles.addPhotoBtn}
           onPress={() => {
@@ -256,6 +343,7 @@ export default function EditProfileScreen({ navigation }: any) {
           <Text style={styles.addPhotoText}>Add Photos</Text>
         </TouchableOpacity>
 
+        {/* SMART PHOTOS */}
         <Text style={styles.sectionTitle}>Your Best Look:</Text>
         <View style={styles.smartRow}>
           <Text style={styles.smartDesc}>
@@ -269,6 +357,7 @@ export default function EditProfileScreen({ navigation }: any) {
           />
         </View>
 
+        {/* BIO */}
         <Text style={styles.sectionTitle}>Bio:</Text>
         <TextInput
           style={styles.bioInput}
@@ -279,6 +368,7 @@ export default function EditProfileScreen({ navigation }: any) {
           placeholderTextColor="#666"
         />
 
+        {/* SEX PREFERENCE */}
         <Text style={styles.sectionTitle}>Interested In:</Text>
         <View style={styles.selectorRow}>
           {ALL_PREFS.map((p) => (
@@ -302,6 +392,7 @@ export default function EditProfileScreen({ navigation }: any) {
           ))}
         </View>
 
+        {/* DATING PREFERENCE */}
         <Text style={styles.sectionTitle}>Dating Preference:</Text>
         <View style={styles.selectorColumn}>
           {DATING_PREFS.map((p) => (
@@ -325,6 +416,7 @@ export default function EditProfileScreen({ navigation }: any) {
           ))}
         </View>
 
+        {/* INTERESTS */}
         <Text style={styles.sectionTitle}>Interests</Text>
 
         <TextInput
@@ -335,6 +427,7 @@ export default function EditProfileScreen({ navigation }: any) {
           onChangeText={setInterestSearch}
         />
 
+        {/* Interest Grid (searchable, expandable) */}
         <View style={styles.interestGrid}>
           {INTERESTS
             .filter((i) =>
@@ -362,6 +455,7 @@ export default function EditProfileScreen({ navigation }: any) {
             ))}
         </View>
 
+        {/* "Show More" / "Show Less" interests */}
         {INTERESTS.filter((i) =>
           i.toLowerCase().includes(interestSearch.toLowerCase())
         ).length > 25 && (
@@ -375,10 +469,10 @@ export default function EditProfileScreen({ navigation }: any) {
           </TouchableOpacity>
         )}
 
-
-
+        {/* ERROR MESSAGE */}
         {error && <Text style={styles.errorText}>{error}</Text>}
 
+        {/* SAVE BUTTON */}
         <TouchableOpacity style={styles.saveBtn} onPress={save}>
           <Text style={styles.saveText}>Save Changes</Text>
         </TouchableOpacity>
@@ -388,6 +482,9 @@ export default function EditProfileScreen({ navigation }: any) {
   );
 }
 
+// ============================================================================
+// STYLES
+// ============================================================================
 const styles = StyleSheet.create({
   container: {
     padding: 20,

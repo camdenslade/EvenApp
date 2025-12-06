@@ -1,3 +1,5 @@
+// backend/src/chat/chat.gateway.ts
+
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -7,12 +9,15 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
+
 import { Server, Socket } from 'socket.io';
 import * as admin from 'firebase-admin';
 
+// Services --------------------------------------------------------------
 import { ChatService } from './chat.service';
 import { UsersService } from '../users/users.service';
 
+// Socket Typing ---------------------------------------------------------
 interface AuthedSocket extends Socket {
   data: {
     uid: string;
@@ -31,6 +36,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly usersService: UsersService,
   ) {}
 
+  // ====================================================================
+  // # CONNECTION
+  // ====================================================================
+  /**
+   * Validates Firebase token and attaches uid to socket.
+   */
   async handleConnection(client: AuthedSocket): Promise<void> {
     try {
       const tokenRaw = client.handshake.auth?.token as unknown;
@@ -40,9 +51,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
 
-      const token = tokenRaw;
-
-      const decoded = await admin.auth().verifyIdToken(token);
+      const decoded = await admin.auth().verifyIdToken(tokenRaw);
 
       client.data = {
         uid: decoded.uid,
@@ -52,8 +61,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  handleDisconnect(): void {}
+  handleDisconnect(): void {
+    // optional: track presence or last online timestamp
+  }
 
+  // ====================================================================
+  // # JOIN THREAD
+  // ====================================================================
+  /**
+   * joinThread
+   *
+   * Allows a user to join a chat room representing a Thread.
+   */
   @SubscribeMessage('joinThread')
   async joinThread(
     @ConnectedSocket() client: AuthedSocket,
@@ -72,6 +91,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return { joined: data.threadId };
   }
 
+  // ====================================================================
+  // # SEND MESSAGE
+  // ====================================================================
+  /**
+   * sendMessage
+   *
+   * Validates access, saves the message, and broadcasts it to the thread.
+   */
   @SubscribeMessage('sendMessage')
   async sendMessage(
     @ConnectedSocket() client: AuthedSocket,

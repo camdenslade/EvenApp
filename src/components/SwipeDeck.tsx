@@ -1,5 +1,7 @@
 // src/components/SwipeDeck.tsx
-import { useRef, memo } from "react";
+
+// React / RN -----------------------------------------------------------
+import { useRef, memo } from 'react';
 import {
   View,
   Text,
@@ -7,31 +9,75 @@ import {
   StyleSheet,
   PanResponder,
   Animated,
-} from "react-native";
-import type { UserProfile } from "../types/user";
+} from 'react-native';
+
+// Types ---------------------------------------------------------------
+import type { UserProfile } from '../types/user';
+
+// ====================================================================
+// # PROPS
+// ====================================================================
 
 interface Props {
+  /** Array of profiles in queue. profiles[0] = top card */
   profiles: UserProfile[];
+
+  /** Triggered when card is swiped left (pass) */
   onSwipeLeft: () => void;
+
+  /** Triggered when card is swiped right (like) */
   onSwipeRight: () => void;
 }
 
+// ====================================================================
+// # SWIPE DECK
+// ====================================================================
+//
+// This is the interactive Tinder-style deck.
+//
+// Core Behavior:
+//   - profiles[0] = active (top) card
+//   - profiles[1] = "next" preview card (scaled down)
+//   - Card moves with drag gesture via pan.x and pan.y
+//   - If movement passes threshold:
+//       dx > +120 → right swipe (LIKE)
+//       dx < -120 → left swipe (PASS)
+//   - When released without threshold, spring back to center
+//
+// Rotation:
+//   - rotate = interpolate(pan.x)
+//   - PanResponder controls updates to pan.x/pan.y
+//
+// swipeOff():
+//   Animates card off screen left/right then resets position
+//
+// NOTE:
+//   This component does NOT decide match logic. It only calls the
+//   provided callbacks, keeping UI and business logic cleanly separated.
+//
+
 function SwipeDeck({ profiles, onSwipeLeft, onSwipeRight }: Props) {
+  // Top profile and next preview
   const topCard = profiles[0] ?? null;
   const nextCard = profiles[1] ?? null;
 
+  // Animated position of the top card
   const pan = useRef(new Animated.ValueXY()).current;
 
+  // Rotation angle based on horizontal drag
   const rotate = pan.x.interpolate({
     inputRange: [-200, 0, 200],
-    outputRange: ["-20deg", "0deg", "20deg"],
-    extrapolate: "clamp",
+    outputRange: ['-20deg', '0deg', '20deg'],
+    extrapolate: 'clamp',
   });
 
   const animatedCardStyle = {
     transform: [...pan.getTranslateTransform(), { rotate }],
   };
 
+  // ------------------------------------------------------------
+  // Swipe the card off screen
+  // ------------------------------------------------------------
   const swipeOff = (toRight: boolean, dy: number) => {
     Animated.timing(pan, {
       toValue: { x: toRight ? 500 : -500, y: dy },
@@ -43,6 +89,9 @@ function SwipeDeck({ profiles, onSwipeLeft, onSwipeRight }: Props) {
     });
   };
 
+  // ------------------------------------------------------------
+  // Gesture Handler
+  // ------------------------------------------------------------
   const responder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, g) =>
@@ -53,9 +102,12 @@ function SwipeDeck({ profiles, onSwipeLeft, onSwipeRight }: Props) {
       },
 
       onPanResponderRelease: (_, g) => {
-        if (g.dx > 120) return swipeOff(true, g.dy);
-        if (g.dx < -120) return swipeOff(false, g.dy);
+        const { dx, dy } = g;
 
+        if (dx > 120) return swipeOff(true, dy);
+        if (dx < -120) return swipeOff(false, dy);
+
+        // Return to center
         Animated.spring(pan, {
           toValue: { x: 0, y: 0 },
           friction: 6,
@@ -67,9 +119,13 @@ function SwipeDeck({ profiles, onSwipeLeft, onSwipeRight }: Props) {
 
   if (!topCard) return null;
 
+  // ====================================================================
+  // # UI
+  // ====================================================================
+
   return (
     <View style={styles.container}>
-      {/* Next card preview */}
+      {/* Next Card (background preview) */}
       {nextCard && (
         <View style={styles.nextCard}>
           <Image
@@ -85,6 +141,7 @@ function SwipeDeck({ profiles, onSwipeLeft, onSwipeRight }: Props) {
         </View>
       )}
 
+      {/* Interactive Top Card */}
       <Animated.View
         style={[styles.card, animatedCardStyle]}
         {...responder.panHandlers}
@@ -115,33 +172,37 @@ function SwipeDeck({ profiles, onSwipeLeft, onSwipeRight }: Props) {
 
 export default memo(SwipeDeck);
 
+// ====================================================================
+// # STYLES
+// ====================================================================
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
 
   card: {
-    position: "absolute",
-    width: "100%",
-    height: "100%",
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
     borderRadius: 16,
-    overflow: "hidden",
-    backgroundColor: "#111",
+    overflow: 'hidden',
+    backgroundColor: '#111',
   },
 
   nextCard: {
-    position: "absolute",
-    width: "100%",
-    height: "100%",
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
     borderRadius: 16,
-    overflow: "hidden",
-    backgroundColor: "#222",
+    overflow: 'hidden',
+    backgroundColor: '#222',
     transform: [{ scale: 0.95 }],
   },
 
   image: {
-    width: "100%",
-    height: "70%",
+    width: '100%',
+    height: '70%',
   },
 
   infoBox: {
@@ -149,25 +210,25 @@ const styles = StyleSheet.create({
   },
 
   name: {
-    color: "white",
+    color: 'white',
     fontSize: 28,
-    fontWeight: "700",
+    fontWeight: '700',
   },
 
   bio: {
-    color: "#aaa",
+    color: '#aaa',
     fontSize: 16,
     marginTop: 6,
   },
 
   interestsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     marginTop: 10,
   },
 
   interestChip: {
-    backgroundColor: "#333",
+    backgroundColor: '#333',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
@@ -176,7 +237,7 @@ const styles = StyleSheet.create({
   },
 
   interestText: {
-    color: "white",
+    color: 'white',
     fontSize: 13,
   },
 });

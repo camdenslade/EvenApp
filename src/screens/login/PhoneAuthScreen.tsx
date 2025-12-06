@@ -1,4 +1,27 @@
 // src/screens/login/PhoneAuthScreen.tsx
+// ============================================================================
+// PhoneAuthScreen
+// Purpose:
+//   Handles all authentication flows for Even Dating that rely on Firebase Auth:
+//
+//   • Phone login → SMS verification (Firebase) + Recaptcha
+//   • Google OAuth → Firebase credential exchange
+//   • Token saving → backend session handling
+//   • Post-login routing → onboarding status check
+//
+// Post-login Flow (Option 2):
+//   1. Save Firebase ID token to secure storage
+//   2. GET /profiles/status
+//   3. If missing  → navigate("Onboarding")
+//      If complete → navigate("Swipe")
+//
+// This screen is invoked by LoginScreen via:
+//
+//   navigation.navigate("PhoneAuth", { provider: "Phone" | "Google" })
+//
+// It does NOT check auth state — AuthLoadingScreen handles that globally.
+// ============================================================================
+
 import { useRef, useState, useEffect } from "react";
 import {
   View,
@@ -26,11 +49,18 @@ import { FirebaseRecaptchaVerifierModal } from "expo-firebase-recaptcha";
 import { SliderCaptcha } from "../../components/SliderCaptcha";
 
 import { saveIdToken } from "../../services/authStorage";
+import { apiGet } from "../../services/apiService";
+
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
 
+// Necessary for Google OAuth redirect handling
 WebBrowser.maybeCompleteAuthSession();
 
+// ============================================================================
+// COUNTRY LIST (Dial Codes)
+// Used in the phone number input dropdown.
+// ============================================================================
 const COUNTRY_LIST = [
   { code: "US", name: "United States", dial: "1" },
   { code: "CA", name: "Canada", dial: "1" },
@@ -40,6 +70,7 @@ const COUNTRY_LIST = [
   { code: "IN", name: "India", dial: "91" },
 ];
 
+// State machine for phone login steps
 type AuthFlowState = "INPUT_PHONE" | "INPUT_CODE" | "VERIFYING";
 type PhoneAuthRouteProp = RouteProp<RootStackParamList, "PhoneAuth">;
 
@@ -49,25 +80,40 @@ const GOOGLE_CLIENT_IDS = {
   android: process.env.EXPO_PUBLIC_ANDROID_ID,
 };
 
+// ============================================================================
+// COMPONENT: PhoneAuthScreen
+// ============================================================================
 export default function PhoneAuthScreen(): React.ReactElement {
   const navigation = useNavigation<any>();
   const route = useRoute<PhoneAuthRouteProp>();
   const { provider } = route.params || { provider: "Unknown" };
 
+  // --------------------------------------------------------------------------
+  // STATE: General auth UI state
+  // --------------------------------------------------------------------------
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // --------------------------------------------------------------------------
+  // STATE: Phone verification workflow
+  // --------------------------------------------------------------------------
   const [phoneNumber, setPhoneNumber] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
   const [flowState, setFlowState] = useState<AuthFlowState>("INPUT_PHONE");
   const [captchaVerified, setCaptchaVerified] = useState(false);
   const [verificationId, setVerificationId] = useState<string | null>(null);
 
+  // --------------------------------------------------------------------------
+  // STATE: Country code selector
+  // --------------------------------------------------------------------------
   const [countryDialingCode, setCountryDialingCode] = useState("1");
   const [pickerVisible, setPickerVisible] = useState(false);
 
   const recaptchaVerifier = useRef<any>(null);
 
+  // --------------------------------------------------------------------------
+  // STATE: Google OAuth setup (expo-auth-session)
+  // --------------------------------------------------------------------------
   const [request, response, promptAsync] = Google.useAuthRequest({
     webClientId: GOOGLE_CLIENT_IDS.web,
     iosClientId: GOOGLE_CLIENT_IDS.ios,
@@ -75,29 +121,51 @@ export default function PhoneAuthScreen(): React.ReactElement {
     scopes: ["profile", "email"],
   });
 
-  interface LoginResponse {
-  isNewUser: boolean;
-  }
-
-
-  async function handleAuthSuccess(idToken: string) {
+  // ========================================================================
+  // ACTION: finishLogin(idToken)
+  // Called after phone code verification to route user based on profile status
+  // ========================================================================
+  async function finishLogin(idToken: string) {
     try {
-      setError(null);
-
       await saveIdToken(idToken);
 
-      const user = auth.currentUser;
+      const status = await apiGet<{ status: "missing" | "complete" }>(
+        "/profiles/status"
+      );
 
-      if (!user) {
+      if (!status) {
         navigation.reset({ index: 0, routes: [{ name: "Login" }] });
         return;
       }
 
       navigation.reset({
         index: 0,
-        routes: [{ name: "Onboarding" }],
+        routes: [
+          { name: status.status === "missing" ? "Onboarding" : "Swipe" },
+        ],
       });
+    } catch (e: any) {
+      setError(`Routing failed: ${e.message}`);
+      navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+    }
+  }
 
+  // ========================================================================
+  // ACTION: handleAuthSuccess(idToken)
+  // Used by Google login — redirects to AuthLoadingScreen afterward.
+  // ========================================================================
+  async function handleAuthSuccess(idToken: string) {
+    try {
+      setError(null);
+      await saveIdToken(idToken);
+
+      const user = auth.currentUser;
+      if (!user) {
+        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+        return;
+      }
+
+      navigation.reset({ index: 0, routes: [{ name: "AuthLoading" }] });
     } catch (e: any) {
       setError(`Final login failed: ${e.message}`);
       navigation.reset({ index: 0, routes: [{ name: "Login" }] });
@@ -106,6 +174,10 @@ export default function PhoneAuthScreen(): React.ReactElement {
     }
   }
 
+  // ========================================================================
+  // EFFECT: Google login handler
+  // Watches OAuth response → exchanges token → signs in with Firebase
+  // ========================================================================
   useEffect(() => {
     if (provider !== "Google") return;
     if (!response) return;
@@ -113,40 +185,42 @@ export default function PhoneAuthScreen(): React.ReactElement {
     setLoading(true);
 
     async function exchangeToken() {
-    if (!response) {
-      setLoading(false);
-      return;
-    }
-    
-    if (response.type === 'success' && response.authentication) {
-      const googleIdToken = response.authentication.idToken;
-
-      if (!googleIdToken) {
-        navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+      if (!response) {
         setLoading(false);
         return;
       }
 
-      try {
-        const credential = GoogleAuthProvider.credential(googleIdToken);
-        const userCred = await signInWithCredential(auth, credential);
-        const firebaseIdToken = await userCred.user.getIdToken();
-        
-        await handleAuthSuccess(firebaseIdToken); 
-        
-      } catch {
-        navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+      if (response.type === "success" && response.authentication) {
+        const googleIdToken = response.authentication.idToken;
+
+        if (!googleIdToken) {
+          navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const credential = GoogleAuthProvider.credential(googleIdToken);
+          const userCred = await signInWithCredential(auth, credential);
+
+          const firebaseIdToken = await userCred.user.getIdToken();
+          await handleAuthSuccess(firebaseIdToken);
+        } catch {
+          navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+        }
+      } else {
+        navigation.goBack();
       }
-    } else {
-      navigation.goBack();
+
+      setLoading(false);
     }
 
-    setLoading(false);
-  }
-
-  exchangeToken();
+    exchangeToken();
   }, [response, provider]);
 
+  // ========================================================================
+  // ACTION: Send SMS verification code
+  // ========================================================================
   async function handleSendCode() {
     if (!phoneNumber) return;
     if (!captchaVerified) {
@@ -176,6 +250,9 @@ export default function PhoneAuthScreen(): React.ReactElement {
     }
   }
 
+  // ========================================================================
+  // ACTION: Verify SMS code → login → finishLogin()
+  // ========================================================================
   async function handleVerifyCode() {
     if (!verificationId) return;
 
@@ -191,17 +268,21 @@ export default function PhoneAuthScreen(): React.ReactElement {
       const userCred = await signInWithCredential(auth, credential);
       const idToken = await userCred.user.getIdToken();
 
-      await handleAuthSuccess(idToken);
+      await finishLogin(idToken);
     } catch {
       setError("Invalid code");
       setFlowState("INPUT_CODE");
-    } finally {
       setLoading(false);
     }
   }
 
+  // Phone or Google depending on LoginScreen selection
   const isPhoneFlow = provider === "Phone";
 
+  // ========================================================================
+  // RENDER: Phone Login UI
+  // - Displays either phone entry or verification code step.
+  // ========================================================================
   if (isPhoneFlow) {
     const headerText =
       flowState === "INPUT_PHONE"
@@ -216,12 +297,14 @@ export default function PhoneAuthScreen(): React.ReactElement {
 
     return (
       <View style={styles.phoneContainer}>
+        {/* Recaptcha required for Firebase phone auth */}
         <FirebaseRecaptchaVerifierModal
           ref={recaptchaVerifier}
           firebaseConfig={auth.app.options}
           attemptInvisibleVerification
         />
 
+        {/* Back navigation */}
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
@@ -233,11 +316,14 @@ export default function PhoneAuthScreen(): React.ReactElement {
 
         {error && <Text style={styles.error}>{error}</Text>}
 
+        {/* MAIN PHONE LOGIN UI */}
         {flowState !== "VERIFYING" && (
           <>
+            {/* Phone number step */}
             {flowState === "INPUT_PHONE" && (
               <>
                 <View style={styles.inputRow}>
+                  {/* Country code selector */}
                   <TouchableOpacity
                     style={styles.countryPickerButton}
                     onPress={() => setPickerVisible(true)}
@@ -248,6 +334,7 @@ export default function PhoneAuthScreen(): React.ReactElement {
                     <Ionicons name="chevron-down" size={16} color="black" />
                   </TouchableOpacity>
 
+                  {/* Phone number input */}
                   <TextInput
                     style={styles.phoneNumberInput}
                     placeholder="Phone Number"
@@ -259,10 +346,12 @@ export default function PhoneAuthScreen(): React.ReactElement {
                   />
                 </View>
 
+                {/* Slider captcha */}
                 <SliderCaptcha onVerified={() => setCaptchaVerified(true)} />
               </>
             )}
 
+            {/* Verification code step */}
             {flowState === "INPUT_CODE" && (
               <TextInput
                 style={styles.input}
@@ -276,6 +365,7 @@ export default function PhoneAuthScreen(): React.ReactElement {
               />
             )}
 
+            {/* Continue button */}
             <TouchableOpacity
               style={[
                 styles.button,
@@ -302,10 +392,12 @@ export default function PhoneAuthScreen(): React.ReactElement {
           </>
         )}
 
+        {/* Loading state for verifying */}
         {flowState === "VERIFYING" && (
           <ActivityIndicator size="large" color="white" />
         )}
 
+        {/* Country selection modal */}
         {pickerVisible && (
           <View style={styles.countryModal}>
             <View style={styles.countryModalInner}>
@@ -337,6 +429,9 @@ export default function PhoneAuthScreen(): React.ReactElement {
     );
   }
 
+  // ========================================================================
+  // RENDER: Fallback for unsupported providers
+  // ========================================================================
   return (
     <View style={styles.container}>
       <Text style={styles.statusText}>
@@ -352,7 +447,9 @@ export default function PhoneAuthScreen(): React.ReactElement {
   );
 }
 
-
+// ============================================================================
+// STYLESHEET
+// ============================================================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,

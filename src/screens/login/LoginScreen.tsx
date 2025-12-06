@@ -1,4 +1,33 @@
 // src/screens/login/LoginScreen.tsx
+// ============================================================================
+// LoginScreen
+// Purpose:
+//   Entry point for authentication. Provides two modes:
+//
+//   (1) Default view
+//       • Create Account (via Phone provider)
+//       • Sign In (expands 3rd-party auth options)
+//       • Search Nearby (guest browsing)
+//
+//   (2) Sign-in options view (expanded)
+//       • Google sign-in
+//       • Phone sign-in
+//       • Back button
+//
+// Behavior:
+//   - Does NOT verify authentication state (AuthLoadingScreen handles that)
+//   - Routes to PhoneAuth with a provider parameter
+//   - Routes to SearchScreen for optional guest mode
+//
+// Navigation:
+//   navigation.navigate("PhoneAuth", { provider })
+//   navigation.navigate("Search")
+//
+// Dependencies:
+//   - Ionicons for icons
+//   - useNavigation hook
+// ============================================================================
+
 import { useState } from "react";
 import {
   View,
@@ -10,8 +39,23 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 
+// ----------------------------------------------------------------------------
+// ASSETS
+// ----------------------------------------------------------------------------
 const APP_LOGO = require("../../../assets/images/Even-App-Logos/TransparentBG/EE-SolidWhite.png");
 
+// ============================================================================
+// COMPONENT: SocialButton
+// Reusable button for third-party providers (Google, Phone)
+//
+// Props:
+//   • iconName  → Ionicons glyph
+//   • title     → provider label
+//   • onPress   → callback
+//   • iconColor
+//   • backgroundColor
+//   • textColor
+// ============================================================================
 const SocialButton = ({
   iconName,
   title,
@@ -36,6 +80,14 @@ const SocialButton = ({
   </TouchableOpacity>
 );
 
+// ============================================================================
+// COMPONENT: PrimaryActionButton
+// Main CTA buttons for create account / sign in / search
+//
+// Variants:
+//   • defaultButton   → white background
+//   • invertedButton  → transparent black/white outline
+// ============================================================================
 const PrimaryActionButton = ({
   title,
   onPress,
@@ -63,20 +115,42 @@ const PrimaryActionButton = ({
   </TouchableOpacity>
 );
 
+// ============================================================================
+// SCREEN: LoginScreen
+// State Machine:
+//
+//   showOptions = false  → default landing
+//   showOptions = true   → expanded sign-in options
+//
+// Routes:
+//   - PhoneAuth(provider)
+//   - Search (guest mode)
+//
+// This screen is purely UI and routing. No auth logic is executed here.
+// ============================================================================
 export default function LoginScreen(): React.ReactElement {
   const navigation = useNavigation<any>();
   const [showOptions, setShowOptions] = useState(false);
 
+  // ---------------------------------------------------------------------------
+  // Handler: Redirect to PhoneAuth with the selected provider
+  // ---------------------------------------------------------------------------
   const handleSocialLogin = (provider: "Phone" | "Google") => {
     navigation.navigate("PhoneAuth", { provider });
   };
 
+  // ============================================================================
+  // VIEW MODE 2: SIGN-IN OPTIONS
+  // Appears when user taps "Sign In"
+  // ============================================================================
   if (showOptions) {
     return (
       <View style={styles.container}>
+        {/* Logo + App Title */}
         <Image source={APP_LOGO} style={styles.logoImage} resizeMode="contain" />
         <Text style={styles.logoText}>Even Dating</Text>
 
+        {/* Terms + Privacy */}
         <View style={styles.policyTextWrapper}>
           <Text style={styles.policyText}>
             By tapping 'Sign in', you agree to our Terms. Learn how we process your
@@ -84,6 +158,7 @@ export default function LoginScreen(): React.ReactElement {
           </Text>
         </View>
 
+        {/* Google Auth */}
         <SocialButton
           iconName="logo-google"
           title="Sign in with Google"
@@ -93,6 +168,7 @@ export default function LoginScreen(): React.ReactElement {
           textColor="black"
         />
 
+        {/* Phone Auth */}
         <SocialButton
           iconName="call"
           title="Sign in with Phone Number"
@@ -102,15 +178,18 @@ export default function LoginScreen(): React.ReactElement {
           textColor="black"
         />
 
+        {/* Guest Search */}
         <PrimaryActionButton
           title="Search Nearby"
           onPress={() => navigation.navigate("Search")}
         />
 
+        {/* Troubleshooting */}
         <TouchableOpacity style={styles.troubleButton}>
           <Text style={styles.troubleText}>Trouble signing in?</Text>
         </TouchableOpacity>
 
+        {/* Back to default view */}
         <TouchableOpacity
           onPress={() => setShowOptions(false)}
           style={styles.backButton}
@@ -121,11 +200,15 @@ export default function LoginScreen(): React.ReactElement {
     );
   }
 
+  // ============================================================================
+  // VIEW MODE 1: DEFAULT LANDING
+  // ============================================================================
   return (
     <View style={styles.container}>
       <Image source={APP_LOGO} style={styles.logoImage} resizeMode="contain" />
       <Text style={styles.logoText}>Even Dating</Text>
 
+      {/* Legal Notice */}
       <View style={styles.policyTextWrapper}>
         <Text style={styles.policyText}>
           By tapping 'Create account' or 'Sign in', you agree to our Terms. Learn how
@@ -133,31 +216,37 @@ export default function LoginScreen(): React.ReactElement {
         </Text>
       </View>
 
+      {/* Create Account → PhoneAuth */}
       <PrimaryActionButton
         title="Create Account"
         onPress={() => handleSocialLogin("Phone")}
       />
 
+      {/* Expand sign-in options */}
       <PrimaryActionButton
         title="Sign In"
         onPress={() => setShowOptions(true)}
         inverted
       />
 
+      {/* Guest search */}
       <PrimaryActionButton
         title="Search Nearby"
         onPress={() => navigation.navigate("Search")}
         inverted
       />
 
+      {/* Troubleshooting */}
       <TouchableOpacity style={styles.troubleButton}>
         <Text style={styles.troubleText}>Trouble signing in?</Text>
       </TouchableOpacity>
     </View>
   );
-
 }
 
+// ============================================================================
+// STYLES
+// ============================================================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -166,6 +255,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     paddingBottom: 60,
   },
+
   logoImage: {
     width: 250,
     height: 80,
@@ -174,31 +264,36 @@ const styles = StyleSheet.create({
     top: 100,
     alignSelf: "center",
   },
-  policyTextWrapper: {
-    marginBottom: 20,
-    paddingHorizontal: 15,
-  },
-  policyText: {
-    color: "#AAAAAA",
-    fontSize: 13,
-    textAlign: "center",
-    lineHeight: 18,
-  },
+
   logoText: {
     color: "white",
     fontSize: 48,
     fontWeight: "bold",
     textAlign: "center",
     position: "absolute",
-    alignSelf: "center",
     top: 200,
+    alignSelf: "center",
   },
+
+  policyTextWrapper: {
+    marginBottom: 20,
+    paddingHorizontal: 15,
+  },
+
+  policyText: {
+    color: "#AAAAAA",
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+
   backButton: {
     position: "absolute",
     top: 50,
     left: 20,
     zIndex: 10,
   },
+
   primaryButton: {
     height: 50,
     borderRadius: 25,
@@ -208,12 +303,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "white",
   },
+
   defaultButton: {
     backgroundColor: "white",
   },
   invertedButton: {
     backgroundColor: "transparent",
   },
+
   primaryButtonText: {
     fontSize: 16,
     fontWeight: "600",
@@ -224,6 +321,7 @@ const styles = StyleSheet.create({
   invertedButtonText: {
     color: "white",
   },
+
   socialButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -241,6 +339,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+
   troubleButton: {
     marginTop: 15,
   },

@@ -1,3 +1,5 @@
+// backend/src/reviews/dto/create-review.dto.ts
+
 import {
   IsString,
   IsNotEmpty,
@@ -7,6 +9,14 @@ import {
   Max,
   IsOptional,
 } from 'class-validator';
+
+// ====================================================================
+// # CREATE REVIEW DTO
+// ====================================================================
+//
+// Represents the payload required to create a review.
+// Validation rules enforce rating bounds, review type, and comment integrity.
+//
 
 export class CreateReviewDto {
   @IsString()

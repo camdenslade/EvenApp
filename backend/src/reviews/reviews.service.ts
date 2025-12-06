@@ -1,3 +1,5 @@
+// backend/src/reviews/reviews.service.ts
+
 import {
   Injectable,
   BadRequestException,
@@ -7,15 +9,20 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
+// Entities --------------------------------------------------------------
 import { Review } from '../database/entities/review.entity';
 import { ReviewStrike } from '../database/entities/review-strike.entity';
 import { ReviewWeekWindow } from '../database/entities/review-week-window.entity';
 import { ReviewEmergency } from '../database/entities/review-emergency.entity';
 
+// Services --------------------------------------------------------------
 import { UsersService } from '../users/users.service';
 import { ChatService } from '../chat/chat.service';
+
+// Keyword Moderation ----------------------------------------------------
 import { FLAGGED_WORDS } from './keywords';
 
+// DTO (Internal) --------------------------------------------------------
 interface CreateReviewDto {
   reviewerUid: string;
   targetUid: string;
@@ -27,12 +34,16 @@ interface CreateReviewDto {
 
 @Injectable()
 export class ReviewsService {
+  // ====================================================================
+  // # CONSTANTS
+  // ====================================================================
+
   private readonly WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
   private readonly STRIKE_TIMEOUT_HOURS: Record<number, number> = {
-    1: 24,
-    2: 72,
-    3: 168,
+    1: 24, // 1 day
+    2: 72, // 3 days
+    3: 168, // 7 days
   };
 
   private readonly FLAGGED_WORDS = FLAGGED_WORDS;
@@ -54,6 +65,10 @@ export class ReviewsService {
     private readonly chat: ChatService,
   ) {}
 
+  // ====================================================================
+  // # PRIVATE HELPERS — VALIDATION
+  // ====================================================================
+
   private async alreadyReviewed(reviewerUid: string, targetUid: string) {
     const existing = await this.reviewsRepo.findOne({
       where: { reviewerUid, targetUid },
@@ -66,6 +81,10 @@ export class ReviewsService {
     return this.FLAGGED_WORDS.some((w) => lower.includes(w));
   }
 
+  // ====================================================================
+  // # PRIVATE HELPERS — ISSUE STRIKE
+  // ====================================================================
+
   private async issueStrike(uid: string, reason: string): Promise<number> {
     const user = await this.users.getByUid(uid);
     if (!user) throw new NotFoundException('User not found for strike');
@@ -76,7 +95,6 @@ export class ReviewsService {
 
     const strikeNumber = previousStrikes + 1;
     const timeoutHours = this.STRIKE_TIMEOUT_HOURS[strikeNumber] ?? 0;
-
     const expiresAt = new Date(Date.now() + timeoutHours * 3600 * 1000);
 
     const strike = this.strikesRepo.create({
@@ -89,6 +107,7 @@ export class ReviewsService {
 
     await this.strikesRepo.save(strike);
 
+    // Auto-penalty review for 3rd strike
     if (strikeNumber === 3) {
       const penalty = this.reviewsRepo.create({
         reviewerUid: 'SYSTEM',
@@ -104,6 +123,10 @@ export class ReviewsService {
     return strikeNumber;
   }
 
+  // ====================================================================
+  // # PRIVATE HELPERS — WEEKLY WINDOW
+  // ====================================================================
+
   private async getOrCreateWeekWindow(uid: string): Promise<ReviewWeekWindow> {
     const user = await this.users.getByUid(uid);
     if (!user) throw new NotFoundException('User not found');
@@ -114,16 +137,18 @@ export class ReviewsService {
       where: { user: { id: user.id } },
     });
 
+    // Create new window
     if (!existing) {
-      const newWindow = this.weekRepo.create({
+      const window = this.weekRepo.create({
         user,
         windowStart: now,
         windowEnd: new Date(now.getTime() + this.WEEK_MS),
         reviewsUsed: 0,
       });
-      return this.weekRepo.save(newWindow);
+      return this.weekRepo.save(window);
     }
 
+    // Reset expired window
     if (now > existing.windowEnd) {
       existing.windowStart = now;
       existing.windowEnd = new Date(now.getTime() + this.WEEK_MS);
@@ -133,6 +158,10 @@ export class ReviewsService {
 
     return existing;
   }
+
+  // ====================================================================
+  // # PRIVATE HELPERS — CHAT VALIDATION
+  // ====================================================================
 
   private async hasTwoWayChat(aUid: string, bUid: string) {
     const msgs = await this.chat.getMessagesBetweenUsers(aUid, bUid);
@@ -161,6 +190,10 @@ export class ReviewsService {
     });
   }
 
+  // ====================================================================
+  // # CREATE REVIEW
+  // ====================================================================
+
   async createReview(dto: CreateReviewDto) {
     const { reviewerUid, targetUid, rating, comment, type } = dto;
 
@@ -168,12 +201,12 @@ export class ReviewsService {
       throw new BadRequestException('You cannot review yourself.');
     }
 
+    // Validate users
     const reviewer = await this.users.getByUid(reviewerUid);
     const target = await this.users.getByUid(targetUid);
-    if (!reviewer || !target) {
-      throw new NotFoundException('User not found.');
-    }
+    if (!reviewer || !target) throw new NotFoundException('User not found.');
 
+    // Prevent double reviews
     if (await this.alreadyReviewed(reviewerUid, targetUid)) {
       throw new ForbiddenException('You already reviewed this user.');
     }
@@ -181,13 +214,18 @@ export class ReviewsService {
     const isEmergency = type === 'emergency';
     const isReport = type === 'report';
 
+    // ------------------------------------------------------------------
+    // # EMERGENCY REVIEW RULES
+    // ------------------------------------------------------------------
     if (isEmergency) {
       const existing = await this.getEmergencyRecord(reviewerUid, targetUid);
+
       if (existing?.used) {
         throw new ForbiddenException(
           'You already used your emergency review for this user.',
         );
       }
+
       if (!reviewer.phone) {
         throw new ForbiddenException(
           'Emergency reviews require a verified phone number.',
@@ -195,6 +233,9 @@ export class ReviewsService {
       }
     }
 
+    // ------------------------------------------------------------------
+    // # REPORT REVIEW RULES
+    // ------------------------------------------------------------------
     if (isReport) {
       const allowed = await this.hasReceivedOneMessage(reviewerUid, targetUid);
       if (!allowed) {
@@ -204,16 +245,11 @@ export class ReviewsService {
       }
     }
 
-    if (!isEmergency && !isReport) {
-      const ok = await this.hasTwoWayChat(reviewerUid, targetUid);
-      if (!ok) {
-        throw new ForbiddenException(
-          'Both users must exchange at least 2 messages each before reviewing.',
-        );
-      }
-    }
-
+    // ------------------------------------------------------------------
+    // # NORMAL REVIEW RULES — WEEKLY LIMITS
+    // ------------------------------------------------------------------
     let window: ReviewWeekWindow | null = null;
+
     if (!isEmergency && !isReport) {
       const active = await this.getOrCreateWeekWindow(reviewerUid);
 
@@ -221,6 +257,7 @@ export class ReviewsService {
         throw new ForbiddenException('You used all 3 reviews this week.');
       }
 
+      // Weekly tier rating guardrails
       if (active.reviewsUsed === 0 && (rating < 3 || rating > 10)) {
         throw new BadRequestException('First review must be between 3–10.');
       }
@@ -234,6 +271,9 @@ export class ReviewsService {
       window = active;
     }
 
+    // ------------------------------------------------------------------
+    // # KEYWORD MODERATION
+    // ------------------------------------------------------------------
     if (this.containsFlaggedWord(comment)) {
       const strike = await this.issueStrike(
         reviewerUid,
@@ -244,6 +284,9 @@ export class ReviewsService {
       );
     }
 
+    // ------------------------------------------------------------------
+    // # SAVE REVIEW
+    // ------------------------------------------------------------------
     const review = this.reviewsRepo.create({
       reviewerUid,
       targetUid,
@@ -257,18 +300,19 @@ export class ReviewsService {
 
     await this.reviewsRepo.save(review);
 
+    // Apply weekly usage
     if (window) {
       window.reviewsUsed += 1;
       await this.weekRepo.save(window);
     }
 
+    // ------------------------------------------------------------------
+    // # EMERGENCY REVIEW FINALIZATION
+    // ------------------------------------------------------------------
     if (isEmergency) {
       const existing =
         (await this.getEmergencyRecord(reviewerUid, targetUid)) ||
-        this.emergencyRepo.create({
-          reviewer,
-          target,
-        });
+        this.emergencyRepo.create({ reviewer, target });
 
       existing.used = true;
       existing.usedAt = new Date();
@@ -280,6 +324,10 @@ export class ReviewsService {
     return review;
   }
 
+  // ====================================================================
+  // # REVIEW QUERIES
+  // ====================================================================
+
   async getUserReviews(uid: string) {
     return this.reviewsRepo.find({
       where: { targetUid: uid },
@@ -290,9 +338,7 @@ export class ReviewsService {
   async getUserAverage(uid: string) {
     const reviews = await this.getUserReviews(uid);
     if (reviews.length === 0) return null;
-
     const avg = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
-
     return Number(avg.toFixed(1));
   }
 

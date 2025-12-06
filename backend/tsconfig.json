@@ -1,27 +1,56 @@
 {
   "compilerOptions": {
+    // ================================================================
+    // # MODULE SYSTEM
+    // ================================================================
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "resolvePackageJsonExports": true,
+
+    // ================================================================
+    // # JS/TS INTEROP
+    // ================================================================
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "isolatedModules": true,
-    "declaration": true,
-    "removeComments": true,
+
+    // ================================================================
+    // # DECORATORS (NestJS Required)
+    // ================================================================
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
-    "allowSyntheticDefaultImports": true,
+
+    // ================================================================
+    // # OUTPUT & BUILD
+    // ================================================================
     "target": "ES2023",
-    "sourceMap": true,
     "outDir": "./dist",
-    "baseUrl": "./",
+    "declaration": true,
+    "removeComments": true,
+    "sourceMap": true,
     "incremental": true,
+    "baseUrl": "./",
+
+    // ================================================================
+    // # STRICTNESS
+    // ================================================================
     "skipLibCheck": true,
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
+
+    // Project overrides (not fully strict)
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false
   },
-  "include": ["src/**/*"],
+
+  // ================================================================
+  // # INCLUDED FILES
+  // ================================================================
+  "include": ["src/**/*", "typeorm/**/*"],
+
+  // ================================================================
+  // # EXCLUDED FILES
+  // ================================================================
   "exclude": ["node_modules"]
 }

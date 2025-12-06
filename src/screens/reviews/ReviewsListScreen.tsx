@@ -1,4 +1,38 @@
 // src/screens/reviews/ReviewsListScreen.tsx
+// ============================================================================
+// ReviewsListScreen
+// Purpose:
+//   Displays all reviews *received by the logged-in user*.
+//
+// Backend Endpoint:
+//   GET /reviews/me
+//
+// Returned structure (ReviewItem):
+//   [
+//     {
+//       id: string,
+//       reviewerUid: string,
+//       reviewerName?: string,
+//       rating: number,
+//       comment: string,
+//       createdAt: string
+//     }
+//   ]
+//
+// Navigation:
+//   Tapping a review → navigate("ReviewDetail", { reviewId })
+//
+// UI States:
+//   • Loading spinner
+//   • Empty state: "You have no reviews yet"
+//   • Scrollable list of review cards
+//
+// Notes:
+//   - Uses RatingGauge to render a circular score.
+//   - Reviewer name falls back to UID if name missing.
+//   - Comment preview is truncated to 2 lines.
+// ============================================================================
+
 import { useEffect, useState } from "react";
 import {
   View,
@@ -12,6 +46,7 @@ import {
 import { apiGet } from "../../services/apiService";
 import { RatingGauge } from "./RatingGauge";
 
+// Shape of one review returned by backend
 interface ReviewItem {
   id: string;
   reviewerUid: string;
@@ -21,6 +56,7 @@ interface ReviewItem {
   reviewerName?: string | null;
 }
 
+// Color palette for screen styling
 const COLORS = {
   bg: "#222222",
   surface: "#1c1c1c",
@@ -31,9 +67,18 @@ const COLORS = {
 };
 
 export default function ReviewsListScreen({ navigation }: any) {
+  // --------------------------------------------------------------------------
+  // STATE: fetch status + list of reviews
+  // --------------------------------------------------------------------------
   const [loading, setLoading] = useState(true);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
 
+  // --------------------------------------------------------------------------
+  // EFFECT: Load all reviews for logged-in user
+  //
+  // - Calls GET /reviews/me
+  // - Populates list, then turns off loading
+  // --------------------------------------------------------------------------
   useEffect(() => {
     async function load() {
       try {
@@ -46,12 +91,18 @@ export default function ReviewsListScreen({ navigation }: any) {
     load();
   }, []);
 
+  // Navigate to detail page
   const openDetail = (id: string) => {
     navigation.navigate("ReviewDetail", { reviewId: id });
   };
 
+  // --------------------------------------------------------------------------
+  // RENDER UI
+  // --------------------------------------------------------------------------
   return (
     <View style={styles.container}>
+
+      {/* Header Section */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -63,15 +114,28 @@ export default function ReviewsListScreen({ navigation }: any) {
         <Text style={styles.headerTitle}>Your Reviews</Text>
       </View>
 
+      {/* ------------------------------
+          State: Loading
+      ------------------------------ */}
       {loading ? (
         <View style={styles.centerWrap}>
           <ActivityIndicator size="large" color={COLORS.white} />
         </View>
-      ) : reviews.length === 0 ? (
+      ) : 
+      
+      /* ------------------------------
+          State: No Reviews
+      ------------------------------ */
+      reviews.length === 0 ? (
         <View style={styles.centerWrap}>
           <Text style={styles.emptyText}>You have no reviews yet.</Text>
         </View>
-      ) : (
+      ) : 
+      
+      /* ------------------------------
+          State: List of Reviews
+      ------------------------------ */
+      (
         <ScrollView contentContainerStyle={styles.scrollWrap}>
           {reviews.map((r) => (
             <TouchableOpacity
@@ -79,6 +143,7 @@ export default function ReviewsListScreen({ navigation }: any) {
               style={styles.reviewCard}
               onPress={() => openDetail(r.id)}
             >
+              {/* Rating circle */}
               <View style={styles.ratingWrapper}>
                 <RatingGauge 
                   average={r.rating}
@@ -87,6 +152,7 @@ export default function ReviewsListScreen({ navigation }: any) {
                 />
               </View>
 
+              {/* Right column: reviewer + comment */}
               <View style={{ flex: 1 }}>
                 <Text style={styles.reviewer}>
                   {r.reviewerName ?? r.reviewerUid}
@@ -114,12 +180,16 @@ export default function ReviewsListScreen({ navigation }: any) {
   );
 }
 
+// ============================================================================
+// STYLES
+// ============================================================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.bg,
   },
 
+  // Header layout
   header: {
     paddingTop: 100,
     paddingBottom: 20,
@@ -135,11 +205,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
+  // Empty + loading wrappers
   centerWrap: {
     flex: 1,
     justifyContent: "flex-start",
     alignItems: "center",
-    paddingTop: 250
+    paddingTop: 250,
   },
 
   emptyText: {
@@ -152,6 +223,7 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
 
+  // Review card layout
   reviewCard: {
     flexDirection: "row",
     backgroundColor: COLORS.surface,

@@ -1,4 +1,32 @@
 // src/screens/profile/SearchScreen.tsx
+// ============================================================================
+// SearchScreen
+//
+// PURPOSE:
+//   Allows users to manually search for other users by FIRST NAME.
+//   Shows results with:
+//     • name, age, distance
+//     • photo
+//     • bio preview
+//     • rating summary (RatingGauge)
+//
+// API FLOW:
+//   1. User types a name (firstName)
+//   2. GET /search/name?firstName=X&radius=25 → list of profiles
+//   3. For each result, GET /reviews/summary/{userId}
+//   4. Results displayed in scrollable list
+//
+// BEHAVIOR:
+//   • Displays loading indicator during full search
+//   • Handles empty field validation
+//   • Handles backend failures gracefully
+//   • Navigates to UserProfileView on card press
+//
+// NOTES:
+//   • RatingGauge loads per-user review summary
+//   • Distance shown in miles (fixed 1 decimal place)
+// ============================================================================
+
 import { useState } from "react";
 import {
   View,
@@ -14,6 +42,7 @@ import {
 import { apiGet } from "../../services/apiService";
 import { RatingGauge } from "../reviews/RatingGauge";
 
+// Result object returned from `/search/name`
 interface SearchResult {
   id: string;
   firstName: string;
@@ -23,30 +52,45 @@ interface SearchResult {
   distanceMiles: number;
 }
 
+// Rating summary per user
 interface RatingSummary {
   average: number | null;
   count: number;
 }
 
 export default function SearchScreen({ navigation }: any) {
-  const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [ratings, setRatings] = useState<Record<string, RatingSummary>>({});
+  // ============================================================================
+  // LOCAL STATE
+  // ============================================================================
+  const [query, setQuery] = useState(""); // Name input
+  const [loading, setLoading] = useState(false); // Search in progress
+  const [results, setResults] = useState<SearchResult[]>([]); // Found profiles
+  const [ratings, setRatings] = useState<Record<string, RatingSummary>>({}); // UserId → RatingSummary
   const [error, setError] = useState<string | null>(null);
 
+  // ============================================================================
+  // handleSearch()
+  //
+  // Executes the full search process:
+  //   1. Validate input
+  //   2. GET name search results
+  //   3. For each result → GET rating summary
+  //   4. Store everything in state
+  // ============================================================================
   async function handleSearch() {
     setError(null);
     setLoading(true);
     setResults([]);
     setRatings({});
 
+    // ---- Validate ----
     if (!query.trim()) {
       setError("Enter a first name.");
       setLoading(false);
       return;
     }
 
+    // ---- Search Request ----
     const data = await apiGet<SearchResult[]>(
       `/search/name?firstName=${encodeURIComponent(query.trim())}&radius=25`
     );
@@ -59,7 +103,11 @@ export default function SearchScreen({ navigation }: any) {
 
     setResults(data);
 
+    // ---- Load Rating Summaries for each user ----
     const summaries: Record<string, RatingSummary> = {};
+
+    // NOTE:
+    //   This is sequential. You *can* optimize by batching or parallelizing later.
     for (const r of data) {
       const summary = await apiGet<RatingSummary>(`/reviews/summary/${r.id}`);
       summaries[r.id] = summary || { average: null, count: 0 };
@@ -69,8 +117,12 @@ export default function SearchScreen({ navigation }: any) {
     setLoading(false);
   }
 
+  // ============================================================================
+  // RENDER
+  // ============================================================================
   return (
     <View style={styles.container}>
+      {/* Back Navigation */}
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => navigation.goBack()}
@@ -80,6 +132,7 @@ export default function SearchScreen({ navigation }: any) {
 
       <Text style={styles.header}>Search by Name</Text>
 
+      {/* Name Input */}
       <TextInput
         style={styles.input}
         placeholder="First name"
@@ -88,10 +141,12 @@ export default function SearchScreen({ navigation }: any) {
         onChangeText={setQuery}
       />
 
+      {/* Execute Search */}
       <TouchableOpacity style={styles.searchBtn} onPress={handleSearch}>
         <Text style={styles.searchText}>Search</Text>
       </TouchableOpacity>
 
+      {/* Loading Indicator */}
       {loading && (
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color="white" />
@@ -99,8 +154,10 @@ export default function SearchScreen({ navigation }: any) {
         </View>
       )}
 
+      {/* Error Message */}
       {error && <Text style={styles.error}>{error}</Text>}
 
+      {/* Search Results List */}
       <ScrollView style={styles.results}>
         {results.map((r) => {
           const rating = ratings[r.id];
@@ -115,11 +172,13 @@ export default function SearchScreen({ navigation }: any) {
                 })
               }
             >
+              {/* Profile Photo */}
               <Image
                 source={{ uri: r.photoUrl ?? undefined }}
                 style={styles.avatar}
               />
 
+              {/* User Info */}
               <View style={styles.cardInfo}>
                 <Text style={styles.cardName}>
                   {r.firstName}, {r.age}
@@ -134,6 +193,7 @@ export default function SearchScreen({ navigation }: any) {
                 </Text>
               </View>
 
+              {/* Rating Gauge */}
               <View style={styles.gaugeWrap}>
                 {rating ? (
                   <RatingGauge
@@ -149,6 +209,7 @@ export default function SearchScreen({ navigation }: any) {
           );
         })}
 
+        {/* No Results */}
         {results.length === 0 && !loading && !error && (
           <Text style={styles.noResults}>No results yet.</Text>
         )}
@@ -157,6 +218,9 @@ export default function SearchScreen({ navigation }: any) {
   );
 }
 
+// ============================================================================
+// STYLES
+// ============================================================================
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#222", padding: 20 },
 
@@ -196,6 +260,7 @@ const styles = StyleSheet.create({
 
   results: { marginTop: 10 },
 
+  // Result Card
   card: {
     flexDirection: "row",
     backgroundColor: "#333",

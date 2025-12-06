@@ -1,4 +1,30 @@
 // src/screens/profile/ProfileScreen.tsx
+// ============================================================================
+// ProfileScreen
+//
+// PURPOSE:
+//   Displays the logged-in user's profile, reviews, ratings, and feature tabs.
+//   Provides entry points to Settings, Edit Profile, Search, and other premium
+//   features.
+//
+// FEATURES:
+//   • Loads user profile: GET /profiles/me
+//   • Loads review summary: GET /reviews/summary/me
+//   • Tabs: Get More, Safety, Reviews
+//   • Displays profile photo, age, name, preferences
+//   • RatingGauge component for visualizing review scores
+//   • Navigation to EditProfile, Settings, ReviewsList
+//
+// DATA FLOW:
+//   1. Fetch review summary
+//   2. Fetch profile
+//   3. Render tabs + profile content
+//
+// NOTES:
+//   • mainPhoto = first photo in the list
+//   • activeTab controls which section UI is rendered
+// ============================================================================
+
 import { useEffect, useState } from "react";
 import {
   Text,
@@ -9,10 +35,14 @@ import {
   View,
   ActivityIndicator,
 } from "react-native";
+
 import { apiGet } from "../../services/apiService";
 import { BottomNavBar } from "../../components/BottomNavBar";
 import { RatingGauge } from "../reviews/RatingGauge";
 
+// ---------------------------------------------------------------------------
+// PROFILE TYPE (UI Simplified)
+// ---------------------------------------------------------------------------
 interface UserProfileData {
   id: string;
   name: string;
@@ -30,13 +60,14 @@ interface UserProfileData {
     | "long_term_relationship";
 }
 
+// Review summary returned from backend
 interface ReviewSummary {
   average: number | null;
   count: number;
   best: number | null;
 }
 
-
+// Color theme
 const COLORS = {
   bg: "#222222",
   surface: "#1c1c1c",
@@ -50,21 +81,36 @@ const COLORS = {
 };
 
 export default function ProfileScreen({ navigation }: any) {
+  // ============================================================================
+  // STATE
+  // ============================================================================
   const [profile, setProfile] = useState<UserProfileData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Which tab is active
   const [activeTab, setActiveTab] =
     useState<"getmore" | "safety" | "reviews">("reviews");
 
+  // Review metrics summary
   const [reviewSummary, setReviewSummary] = useState<{
     average: number | null;
     count: number;
     best: number | null;
   } | null>(null);
 
+  // ============================================================================
+  // FETCH PROFILE + REVIEWS ON LOAD
+  //
+  // Two API calls:
+  //   1. /reviews/summary/me → rating metrics
+  //   2. /profiles/me → user data
+  //
+  // UI shows loading spinner until both complete.
+  // ============================================================================
   useEffect(() => {
     async function load() {
       try {
+        // ---- Load review summary ----
         const summary = await apiGet<ReviewSummary>("/reviews/summary/me");
         if (summary && typeof summary === "object") {
           setReviewSummary({
@@ -76,6 +122,7 @@ export default function ProfileScreen({ navigation }: any) {
           setReviewSummary(null);
         }
 
+        // ---- Load profile ----
         const data = await apiGet<UserProfileData>("/profiles/me");
         if (data) setProfile(data);
       } finally {
@@ -85,6 +132,9 @@ export default function ProfileScreen({ navigation }: any) {
     load();
   }, []);
 
+  // ============================================================================
+  // LOADING STATE
+  // ============================================================================
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -94,6 +144,9 @@ export default function ProfileScreen({ navigation }: any) {
     );
   }
 
+  // ============================================================================
+  // ERROR: NO PROFILE LOADED
+  // ============================================================================
   if (!profile) {
     return (
       <View style={styles.errorWrap}>
@@ -102,12 +155,19 @@ export default function ProfileScreen({ navigation }: any) {
     );
   }
 
+  // First photo = main avatar
   const mainPhoto = profile.photos[0] ?? null;
 
+  // ============================================================================
+  // MAIN RENDER
+  // ============================================================================
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
       <ScrollView contentContainerStyle={styles.scrollWrap}>
 
+        {/* ---------------------------------------------------------------------
+           SETTINGS BUTTON
+        ---------------------------------------------------------------------- */}
         <View style={styles.topRow}>
           <TouchableOpacity
             onPress={() => navigation.navigate("Settings")}
@@ -120,6 +180,9 @@ export default function ProfileScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
+        {/* ---------------------------------------------------------------------
+           PROFILE HEADER (photo, name, age)
+        ---------------------------------------------------------------------- */}
         <View style={styles.profileWrap}>
           <View style={styles.photoBorder}>
             {mainPhoto ? (
@@ -135,6 +198,9 @@ export default function ProfileScreen({ navigation }: any) {
           <Text style={styles.profileAge}>{profile.age}</Text>
         </View>
 
+        {/* ---------------------------------------------------------------------
+           TABS: Get More | Safety | Reviews
+        ---------------------------------------------------------------------- */}
         <View style={styles.tabsRow}>
           {["getmore", "safety", "reviews"].map((t) => (
             <TouchableOpacity
@@ -158,6 +224,13 @@ export default function ProfileScreen({ navigation }: any) {
           ))}
         </View>
 
+        {/* ---------------------------------------------------------------------
+           REVIEWS TAB
+           Shows:
+             - RatingGauge
+             - Summary
+             - Link to detailed ReviewsList
+        ---------------------------------------------------------------------- */}
         {activeTab === "reviews" && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Your Ratings</Text>
@@ -188,7 +261,10 @@ export default function ProfileScreen({ navigation }: any) {
           </View>
         )}
 
-
+        {/* ---------------------------------------------------------------------
+           GET MORE TAB
+           Monetization / Premium Features
+        ---------------------------------------------------------------------- */}
         {activeTab === "getmore" && (
           <View style={styles.section}>
             <View style={styles.card}>
@@ -220,6 +296,10 @@ export default function ProfileScreen({ navigation }: any) {
           </View>
         )}
 
+        {/* ---------------------------------------------------------------------
+           SAFETY TAB
+           Static information (expandable later)
+        ---------------------------------------------------------------------- */}
         {activeTab === "safety" && (
           <View style={styles.section}>
             <View style={styles.card}>
@@ -231,6 +311,9 @@ export default function ProfileScreen({ navigation }: any) {
           </View>
         )}
 
+        {/* ---------------------------------------------------------------------
+           EDIT PROFILE BUTTON
+        ---------------------------------------------------------------------- */}
         <TouchableOpacity
           onPress={() => navigation.navigate("EditProfile")}
           style={styles.primaryButton}
@@ -239,11 +322,15 @@ export default function ProfileScreen({ navigation }: any) {
         </TouchableOpacity>
       </ScrollView>
 
+      {/* Bottom navigation bar */}
       <BottomNavBar navigation={navigation} active="profile" />
     </View>
   );
 }
 
+// ============================================================================
+// STYLES
+// ============================================================================
 const styles = StyleSheet.create({
   scrollWrap: {
     paddingTop: 10,
@@ -263,6 +350,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg,
   },
   error: { color: COLORS.textPrimary, fontSize: 16 },
+
+  // Settings icon row
   topRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
@@ -280,6 +369,8 @@ const styles = StyleSheet.create({
     resizeMode: "contain",
     tintColor: "white",
   },
+
+  // Profile header
   profileWrap: { alignItems: "center", marginBottom: 10 },
   photoBorder: {
     width: 160,
@@ -304,6 +395,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   profileAge: { color: COLORS.textSecondary, fontSize: 18 },
+
+  // Tabs
   tabsRow: {
     flexDirection: "row",
     justifyContent: "space-evenly",
@@ -313,7 +406,17 @@ const styles = StyleSheet.create({
   tabActive: { borderBottomColor: COLORS.white, borderBottomWidth: 3 },
   tabText: { color: COLORS.textMuted, fontSize: 18 },
   tabTextActive: { color: COLORS.white },
+
+  // Content sections
   section: { paddingHorizontal: 20, marginTop: 10 },
+  sectionTitle: {
+    color: COLORS.white,
+    fontSize: 22,
+    fontWeight: "600",
+    marginBottom: 14,
+  },
+
+  // Cards
   card: {
     backgroundColor: COLORS.surface,
     padding: 20,
@@ -332,6 +435,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
 
+  // Sub-cards
   subCard: {
     backgroundColor: COLORS.surfaceAlt,
     padding: 16,
@@ -345,6 +449,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   subCardText: { color: COLORS.textSecondary },
+
+  // Primary buttons
   primaryButton: {
     backgroundColor: COLORS.white,
     padding: 16,
@@ -357,11 +463,5 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 17,
     fontWeight: "600",
-  },
-  sectionTitle: {
-    color: COLORS.white,
-    fontSize: 22,
-    fontWeight: "600",
-    marginBottom: 14,
   },
 });

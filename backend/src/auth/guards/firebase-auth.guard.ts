@@ -1,3 +1,5 @@
+// backend/src/auth/guards/firebase-auth.guard.ts
+
 import {
   CanActivate,
   ExecutionContext,
@@ -8,6 +10,7 @@ import {
 import * as admin from 'firebase-admin';
 import { Request } from 'express';
 
+// Types ---------------------------------------------------------------
 interface AuthenticatedRequest extends Request {
   user?: {
     uid: string;
@@ -20,12 +23,21 @@ interface AuthenticatedRequest extends Request {
 export class FirebaseAuthGuard implements CanActivate {
   constructor(@Inject('FIREBASE_ADMIN') private firebase: typeof admin) {}
 
+  // ====================================================================
+  // # AUTHENTICATION GUARD
+  // ====================================================================
+  //
+  // Validates Firebase ID tokens from Authorization: Bearer <token>.
+  // On success, attaches req.user with uid/email/phone.
+  // On failure, throws UnauthorizedException.
+  //
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req: AuthenticatedRequest = context.switchToHttp().getRequest();
     const header = req.headers.authorization;
 
-    if (!header || !header.startsWith('Bearer '))
+    if (!header || !header.startsWith('Bearer ')) {
       throw new UnauthorizedException('Missing authorization header');
+    }
 
     const token = header.split(' ')[1];
 

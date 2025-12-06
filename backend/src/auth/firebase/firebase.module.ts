@@ -1,5 +1,16 @@
+// backend/src/auth/firebase/firebase.module.ts
+
 import { Module, Global } from '@nestjs/common';
 import * as admin from 'firebase-admin';
+
+// ====================================================================
+// # FIREBASE MODULE (GLOBAL)
+// ====================================================================
+//
+// Provides a globally available Firebase Admin SDK instance.
+// Ensures the app initializes only once.
+// Exported as 'FIREBASE_ADMIN' for use in guards and services.
+//
 
 @Global()
 @Module({

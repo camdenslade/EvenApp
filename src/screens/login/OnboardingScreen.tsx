@@ -1,4 +1,33 @@
 // src/screens/login/OnboardingScreen.tsx
+// ============================================================================
+// ONBOARDING SCREEN
+// Purpose:
+//   Multi-step profile creation flow executed after a user signs in.
+//   Collects required profile fields before the user can enter the app.
+//
+// Steps:
+//   1) Name, birthday, sex
+//   2) Sex preference
+//   3) Dating preference (age-restricted options)
+//   4) Interests
+//   5) Bio
+//   6) Photo uploads → API submission → onComplete()
+//
+// Backend Endpoints:
+//   GET  /profiles/upload-url?fileType=image/jpeg
+//   POST /profiles/setup
+//
+// Responsibilities:
+//   - Manage step-by-step UI flow
+//   - Validate user inputs incrementally
+//   - Compress photos before upload
+//   - Upload using signed URLs
+//   - Build final payload and call onComplete() on success
+//
+// Navigation:
+//   Parent of this screen is expected to call onComplete() → navigate to next app screen
+// ============================================================================
+
 import { useState } from "react";
 import {
   View,
@@ -9,15 +38,29 @@ import {
   TextInput,
   Image,
 } from "react-native";
+
 import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
+
 import { apiGet, apiPost } from "../../services/apiService";
 import { BirthdayPicker } from "../../components/BirthdayPicker";
 import { INTERESTS } from "../../constants/interests";
 
-export default function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
+// Component receives `onComplete` from parent navigator
+export default function OnboardingScreen({
+  onComplete,
+}: {
+  onComplete: () => void;
+}) {
+  // ============================================================================
+  // STEP STATE
+  // Controls which onboarding panel is visible (1 → 6)
+  // ============================================================================
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
 
+  // ============================================================================
+  // USER INPUT STATE
+  // ============================================================================
   const [name, setName] = useState("");
 
   const currentYear = new Date().getFullYear();
@@ -28,41 +71,45 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
   });
 
   const [sex, setSex] = useState<"male" | "female" | null>(null);
-  const [sexPreference, setSexPreference] = useState<
-    "male" | "female" | "everyone" | null
-  >(null);
 
-  const [datingPreference, setDatingPreference] = useState<
-    | "hookups"
-    | "situationship"
-    | "short_term_relationship"
-    | "short_term_open"
-    | "long_term_open"
-    | "long_term_relationship"
-    | null
-  >(null);
+  const [sexPreference, setSexPreference] =
+    useState<"male" | "female" | "everyone" | null>(null);
+
+  const [datingPreference, setDatingPreference] =
+    useState<
+      | "hookups"
+      | "situationship"
+      | "short_term_relationship"
+      | "short_term_open"
+      | "long_term_open"
+      | "long_term_relationship"
+      | null
+    >(null);
 
   const [interests, setInterests] = useState<string[]>([]);
   const [bio, setBio] = useState("");
-  const [photos, setPhotos] = useState<(string | null)[]>([
-    null, null, null, null, null, null,
-  ]);
+
+  // 6 photo slots — null = empty slot
+  const [photos, setPhotos] = useState<(string | null)[]>(
+    Array(6).fill(null)
+  );
 
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
+  // ============================================================================
+  // IMAGE HANDLERS
+  // ============================================================================
+  // Compress selected images before upload (performance + network savings)
   async function compressToJpeg(uri: string): Promise<string> {
-    const result = await manipulateAsync(
-      uri,
-      [{ resize: { width: 1080 } }],
-      {
-        compress: 0.7,
-        format: SaveFormat.JPEG,
-      }
-    );
+    const result = await manipulateAsync(uri, [{ resize: { width: 1080 } }], {
+      compress: 0.7,
+      format: SaveFormat.JPEG,
+    });
     return result.uri;
   }
 
+  // Select a local image → compress → store temporarily
   async function pickPhoto(index: number) {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -80,45 +127,56 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
     });
   }
 
-  const toggleInterest = (i: string) => {
+  // ============================================================================
+  // INTEREST SELECTION
+  // Toggles a string in the selected interests array
+  // ============================================================================
+  const toggleInterest = (interest: string) => {
     setInterests((prev) =>
-      prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i]
+      prev.includes(interest)
+        ? prev.filter((i) => i !== interest)
+        : [...prev, interest]
     );
   };
 
+  // ============================================================================
+  // FINAL SUBMIT
+  // - Validates all fields
+  // - Uploads photos using signed URLs
+  // - Builds final profile payload
+  // - Calls /profiles/setup
+  // - Fires onComplete()
+  // ============================================================================
   async function handleSubmit() {
     setError(null);
 
-    if (!sex) {
-      setError("Select your sex.");
-      return;
-    }
-    if (!sexPreference) {
-      setError("Select who you're interested in.");
-      return;
-    }
+    // --- Validate required fields ---
+    if (!sex) return setError("Select your sex.");
+    if (!sexPreference) return setError("Select who you're interested in.");
 
     const realPhotos = photos.filter((p) => p !== null);
-    if (realPhotos.length < 1) {
-      setError("At least one photo required.");
-      return;
-    }
+    if (realPhotos.length < 1)
+      return setError("At least one photo required.");
 
+    // --- Upload photos one-by-one ---
     const uploadedUrls: string[] = [];
 
-    for (const uri of realPhotos) {
-      if (!uri) continue;
+    for (const localUri of realPhotos) {
+      if (!localUri) continue;
 
-      const signed = await apiGet<{ uploadUrl: string; fileUrl: string; error?: string }>(
-        `/profiles/upload-url?fileType=image/jpeg`
-      );
+      // Request signed S3/GCP upload URL
+      const signed = await apiGet<{
+        uploadUrl: string;
+        fileUrl: string;
+        error?: string;
+      }>("/profiles/upload-url?fileType=image/jpeg");
 
       if (!signed || signed.error) {
         setError("Photo upload failed.");
         return;
       }
 
-      const blob = await (await fetch(uri)).blob();
+      const blob = await (await fetch(localUri)).blob();
 
       await fetch(signed.uploadUrl, {
         method: "PUT",
@@ -129,7 +187,8 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
       uploadedUrls.push(signed.fileUrl);
     }
 
-    const birthDateISO = new Date(
+    // Format birthday into ISO yyyy-mm-dd
+    const birthISO = new Date(
       birthday.year,
       birthday.month,
       birthday.day
@@ -137,9 +196,10 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
       .toISOString()
       .split("T")[0];
 
+    // Build final payload expected by backend
     const payload = {
       name: name.trim(),
-      birthday: birthDateISO,
+      birthday: birthISO,
       bio,
       sex,
       sexPreference,
@@ -148,20 +208,25 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
       photos: uploadedUrls,
     };
 
-    const res = await apiPost("/profiles/setup", payload);
-    if (!res) {
+    const result = await apiPost("/profiles/setup", payload);
+    if (!result) {
       setError("Setup failed");
       return;
     }
 
+    // Notify parent → navigation happens upstream
     onComplete();
   }
 
+  // ============================================================================
+  // STEP 1 — NAME / BIRTHDAY / SEX
+  // ============================================================================
   if (step === 1) {
     return (
       <ScrollView style={styles.screen}>
         <Text style={styles.header}>Tell us about you</Text>
 
+        {/* Name input */}
         <TextInput
           style={styles.input}
           placeholder="First name"
@@ -172,23 +237,25 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
               setError("No spaces allowed in your first name.");
               return;
             }
-
             setError(null);
             setName(text);
           }}
         />
 
-
+        {/* Birthday picker */}
         <Text style={styles.label}>Birthday</Text>
-
         <BirthdayPicker value={birthday} onChange={setBirthday} />
 
+        {/* Sex selection */}
         <Text style={styles.label}>I am</Text>
 
         {["male", "female"].map((g) => (
           <TouchableOpacity
             key={g}
-            style={[styles.genderOption, sex === g && styles.genderSelected]}
+            style={[
+              styles.genderOption,
+              sex === g && styles.genderSelected,
+            ]}
             onPress={() => setSex(g as "male" | "female")}
           >
             <Text
@@ -202,22 +269,14 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
           </TouchableOpacity>
         ))}
 
+        {/* Continue */}
         <TouchableOpacity
           style={styles.mainButton}
           onPress={() => {
-            if (!name.trim()) {
-              setError("Enter a name.");
-              return;
-            }
-            if (name.includes(" ")) {
-              setError("No spaces allowed in your first name.");
-              return;
-            }
-            if (!sex) {
-              setError("Select your sex.");
-              return;
-            }
-            setError(null);
+            if (!name.trim()) return setError("Enter a name.");
+            if (name.includes(" "))
+              return setError("No spaces allowed in your first name.");
+            if (!sex) return setError("Select your sex.");
             setStep(2);
           }}
         >
@@ -229,6 +288,9 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
     );
   }
 
+  // ============================================================================
+  // STEP 2 — SEX PREFERENCE
+  // ============================================================================
   if (step === 2) {
     return (
       <View style={styles.screen}>
@@ -253,12 +315,19 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
                 sexPreference === opt && styles.genderTextSelected,
               ]}
             >
-              {opt === "male" ? "Men" : opt === "female" ? "Women" : "Everyone"}
+              {opt === "male"
+                ? "Men"
+                : opt === "female"
+                ? "Women"
+                : "Everyone"}
             </Text>
           </TouchableOpacity>
         ))}
 
-        <TouchableOpacity style={styles.mainButton} onPress={() => setStep(3)}>
+        <TouchableOpacity
+          style={styles.mainButton}
+          onPress={() => setStep(3)}
+        >
           <Text style={styles.mainButtonText}>Continue</Text>
         </TouchableOpacity>
 
@@ -267,10 +336,13 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
     );
   }
 
+  // ============================================================================
+  // STEP 3 — DATING PREFERENCE (Age-filtered)
+  // ============================================================================
   if (step === 3) {
     const age = new Date().getFullYear() - birthday.year;
 
-    const RAW_DATING = [
+    const RAW = [
       { value: "hookups", label: "Hookups" },
       { value: "situationship", label: "Situationship" },
       { value: "short_term_relationship", label: "Short-term Relationship" },
@@ -279,16 +351,16 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
       { value: "long_term_relationship", label: "Long-term Relationship" },
     ];
 
-    const DATING_PREFS =
+    // Age gating logic
+    const FILTERED =
       age < 25
-        ? RAW_DATING.filter(
-            (p) => p.value !== "short_term_relationship"
-          )
-        : RAW_DATING.filter((p) => p.value !== "situationship");
+        ? RAW.filter((p) => p.value !== "short_term_relationship")
+        : RAW.filter((p) => p.value !== "situationship");
 
-    if (!DATING_PREFS.some((p) => p.value === datingPreference)) {
-      const fallback = RAW_DATING.find((p) => p.value === datingPreference);
-      if (fallback) DATING_PREFS.unshift(fallback);
+    // If user already selected something filtered out, preserve it
+    if (!FILTERED.some((p) => p.value === datingPreference)) {
+      const saved = RAW.find((p) => p.value === datingPreference);
+      if (saved) FILTERED.unshift(saved);
     }
 
     return (
@@ -299,7 +371,7 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
 
         <Text style={styles.header}>Dating preference</Text>
 
-        {DATING_PREFS.map((p) => (
+        {FILTERED.map((p) => (
           <TouchableOpacity
             key={p.value}
             style={[
@@ -311,7 +383,8 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
             <Text
               style={[
                 styles.genderText,
-                datingPreference === p.value && styles.genderTextSelected,
+                datingPreference === p.value &&
+                  styles.genderTextSelected,
               ]}
             >
               {p.label}
@@ -319,20 +392,26 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
           </TouchableOpacity>
         ))}
 
-        <TouchableOpacity style={styles.mainButton} onPress={() => setStep(4)}>
+        <TouchableOpacity
+          style={styles.mainButton}
+          onPress={() => setStep(4)}
+        >
           <Text style={styles.mainButtonText}>Continue</Text>
         </TouchableOpacity>
       </ScrollView>
     );
   }
 
-
+  // ============================================================================
+  // STEP 4 — INTEREST SELECTION
+  // ============================================================================
   if (step === 4) {
     const filtered = INTERESTS.filter((i) =>
       i.toLowerCase().includes(search.toLowerCase())
     );
 
-    const visible = search.length > 0 ? filtered : filtered.slice(0, 25);
+    const visible =
+      search.length > 0 ? filtered : filtered.slice(0, 25);
 
     return (
       <ScrollView style={styles.screen}>
@@ -350,20 +429,23 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
           onChangeText={setSearch}
         />
 
+        {/* Chip grid */}
         <View style={styles.interestGrid}>
           {visible.map((i) => (
             <TouchableOpacity
               key={i}
+              onPress={() => toggleInterest(i)}
               style={[
                 styles.interestChip,
-                interests.includes(i) && styles.interestChipSelected,
+                interests.includes(i) &&
+                  styles.interestChipSelected,
               ]}
-              onPress={() => toggleInterest(i)}
             >
               <Text
                 style={[
                   styles.interestChipText,
-                  interests.includes(i) && styles.interestChipTextSelected,
+                  interests.includes(i) &&
+                    styles.interestChipTextSelected,
                 ]}
               >
                 {i}
@@ -372,13 +454,19 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
           ))}
         </View>
 
-        <TouchableOpacity style={styles.mainButton} onPress={() => setStep(5)}>
+        <TouchableOpacity
+          style={styles.mainButton}
+          onPress={() => setStep(5)}
+        >
           <Text style={styles.mainButtonText}>Continue</Text>
         </TouchableOpacity>
       </ScrollView>
     );
   }
 
+  // ============================================================================
+  // STEP 5 — BIO
+  // ============================================================================
   if (step === 5) {
     return (
       <ScrollView style={styles.screen}>
@@ -397,13 +485,19 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
           multiline
         />
 
-        <TouchableOpacity style={styles.mainButton} onPress={() => setStep(6)}>
+        <TouchableOpacity
+          style={styles.mainButton}
+          onPress={() => setStep(6)}
+        >
           <Text style={styles.mainButtonText}>Continue</Text>
         </TouchableOpacity>
       </ScrollView>
     );
   }
 
+  // ============================================================================
+  // STEP 6 — PHOTO UPLOADS
+  // ============================================================================
   return (
     <ScrollView style={styles.screen}>
       <TouchableOpacity style={styles.back} onPress={() => setStep(5)}>
@@ -413,6 +507,7 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
       <Text style={styles.header}>Add photos</Text>
       <Text style={styles.subheader}>At least one required</Text>
 
+      {/* 6-slot grid */}
       <View style={styles.photoGrid}>
         {photos.map((p, idx) => (
           <TouchableOpacity
@@ -438,13 +533,27 @@ export default function OnboardingScreen({ onComplete }: { onComplete: () => voi
   );
 }
 
+// ============================================================================
+// STYLES
+// ============================================================================
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#222222", padding: 24 },
+
   back: { position: "absolute", top: 20, left: 20 },
   backText: { fontSize: 26, color: "white" },
 
-  header: { fontSize: 30, fontWeight: "700", color: "white", marginTop: 70, marginBottom: 20 },
-  subheader: { fontSize: 16, color: "#aaa", marginBottom: 10 },
+  header: {
+    fontSize: 30,
+    fontWeight: "700",
+    color: "white",
+    marginTop: 70,
+    marginBottom: 20,
+  },
+  subheader: {
+    fontSize: 16,
+    color: "#aaa",
+    marginBottom: 10,
+  },
 
   input: {
     backgroundColor: "white",
@@ -453,6 +562,14 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     fontSize: 16,
     color: "black",
+  },
+
+  label: {
+    fontSize: 18,
+    fontWeight: "500",
+    color: "white",
+    marginTop: 20,
+    marginBottom: 8,
   },
 
   mainButton: {
@@ -483,6 +600,15 @@ const styles = StyleSheet.create({
   genderText: { fontSize: 18, color: "#444" },
   genderTextSelected: { color: "white" },
 
+  searchInput: {
+    backgroundColor: "#fff",
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 15,
+    fontSize: 16,
+    color: "#000",
+  },
+
   interestGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -497,7 +623,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     margin: 6,
   },
-  interestChipSelected: { backgroundColor: "#fff", borderColor: "#fff" },
+  interestChipSelected: {
+    backgroundColor: "#fff",
+    borderColor: "#fff",
+  },
   interestChipText: { fontSize: 14, color: "#ccc" },
   interestChipTextSelected: { color: "black" },
 
@@ -511,6 +640,7 @@ const styles = StyleSheet.create({
   },
 
   photoGrid: { flexDirection: "row", flexWrap: "wrap" },
+
   photoBox: {
     width: "30%",
     aspectRatio: 1,
@@ -520,23 +650,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  label: {
-    fontSize: 18,
-    fontWeight: "500",
-    color: "white",
-    marginTop: 20,
-    marginBottom: 8,
-  },
-  searchInput: {
-    backgroundColor: "#fff",
-    padding: 14,
-    borderRadius: 10,
-    marginBottom: 15,
-    fontSize: 16,
-    color: "#000",
-  },
-  photo: { width: "100%", height: "100%", borderRadius: 10 },
-  addPhotoText: { color: "#fff", fontSize: 40, fontWeight: "300" },
 
-  error: { color: "red", marginTop: 12, textAlign: "center" },
+  photo: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 10,
+  },
+
+  addPhotoText: {
+    color: "#fff",
+    fontSize: 40,
+    fontWeight: "300",
+  },
+
+  error: {
+    color: "red",
+    marginTop: 12,
+    textAlign: "center",
+  },
 });

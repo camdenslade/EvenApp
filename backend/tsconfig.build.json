@@ -3,5 +3,7 @@
   "compilerOptions": {
     "outDir": "./dist"
   },
-  "exclude": ["typeorm"]
+  "exclude": [
+    "typeorm"
+  ]
 }

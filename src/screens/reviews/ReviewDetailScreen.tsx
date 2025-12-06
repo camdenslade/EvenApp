@@ -1,3 +1,35 @@
+// src/screens/reviews/ReviewDetailScreen.tsx
+// ============================================================================
+// ReviewDetailScreen
+// Purpose:
+//   Displays a single review in full detail, including:
+//     • Reviewer name + photo
+//     • Rating visualized via RatingGauge
+//     • Written comment
+//     • Date posted
+//     • Optional "Report" action (UI only for now)
+//
+// Endpoint:
+//   GET /reviews/:reviewId
+//
+// Returned structure shape:
+//   {
+//     id: string,
+//     rating: number (0–10),
+//     comment: string,
+//     createdAt: number (UNIX timestamp),
+//     reviewer: { uid, name, photoUrl }
+//   }
+//
+// Navigation:
+//   Expects route.params.reviewId
+//
+// Notes:
+//   - Shows spinner while loading.
+//   - Displays placeholder avatar if missing.
+//   - Wraps content in ScrollView for long comments.
+// ============================================================================
+
 import { useEffect, useState } from "react";
 import {
   View,
@@ -12,9 +44,10 @@ import {
 import { apiGet } from "../../services/apiService";
 import { RatingGauge } from "./RatingGauge";
 
+// Type describing one full review
 interface ReviewDetail {
   id: string;
-  rating: number;         // 0–10 float
+  rating: number; // Numerical score (0–10)
   comment: string;
   createdAt: number;
   reviewer: {
@@ -27,9 +60,23 @@ interface ReviewDetail {
 export default function ReviewDetailScreen({ route, navigation }: any) {
   const { reviewId } = route.params;
 
+  // --------------------------------------------------------------------------
+  // STATE: stores fetched review or null before load
+  // --------------------------------------------------------------------------
   const [review, setReview] = useState<ReviewDetail | null>(null);
+
+  // Loading state for fetch
   const [loading, setLoading] = useState(true);
 
+  // --------------------------------------------------------------------------
+  // EFFECT: Fetch review detail on mount
+  //
+  // - Calls GET /reviews/:reviewId
+  // - Sets review state
+  // - Stops loading indicator
+  //
+  // Errors logged silently.
+  // --------------------------------------------------------------------------
   useEffect(() => {
     async function load() {
       try {
@@ -44,6 +91,9 @@ export default function ReviewDetailScreen({ route, navigation }: any) {
     load();
   }, [reviewId]);
 
+  // --------------------------------------------------------------------------
+  // LOADING STATE
+  // --------------------------------------------------------------------------
   if (loading || !review) {
     return (
       <View style={styles.loadingContainer}>
@@ -52,11 +102,18 @@ export default function ReviewDetailScreen({ route, navigation }: any) {
     );
   }
 
+  // Format date for display
   const formatted = new Date(review.createdAt).toLocaleDateString();
 
+  // --------------------------------------------------------------------------
+  // RENDER UI
+  // --------------------------------------------------------------------------
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
-      {/* Reviewer Info */}
+      
+      {/* --------------------------------------------------------------
+          Reviewer Information block
+        -------------------------------------------------------------- */}
       <View style={styles.reviewerRow}>
         <Image
           source={{
@@ -64,31 +121,42 @@ export default function ReviewDetailScreen({ route, navigation }: any) {
           }}
           style={styles.avatar}
         />
+
         <View>
           <Text style={styles.reviewerName}>{review.reviewer.name}</Text>
           <Text style={styles.date}>{formatted}</Text>
         </View>
       </View>
 
-      {/* Rating Gauge */}
+      {/* --------------------------------------------------------------
+          Rating visualization
+        -------------------------------------------------------------- */}
       <RatingGauge 
-        average={review.rating} 
-        count={1} 
-        best={10} 
+        average={review.rating}
+        count={1}
+        best={10}
       />
 
-      {/* Comment */}
+      {/* --------------------------------------------------------------
+          Text comment
+        -------------------------------------------------------------- */}
       <Text style={styles.sectionTitle}>Review</Text>
       <Text style={styles.comment}>{review.comment}</Text>
 
-      {/* Optional Report */}
+      {/* --------------------------------------------------------------
+          Report button (UI only)
+        -------------------------------------------------------------- */}
       <TouchableOpacity style={styles.reportBtn}>
         <Text style={styles.reportText}>Report Review</Text>
       </TouchableOpacity>
+
     </ScrollView>
   );
 }
 
+// ============================================================================
+// STYLES
+// ============================================================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,

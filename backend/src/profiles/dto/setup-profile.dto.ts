@@ -1,4 +1,14 @@
+// backend/src/profiles/dto/setup-profile.dto.ts
+
 import { IsString, IsArray, IsIn, IsDateString } from 'class-validator';
+
+// ====================================================================
+// # SETUP PROFILE DTO
+// ====================================================================
+//
+// Used during onboarding to populate a user's full profile.
+// Ensures all critical fields are validated before profile creation.
+//
 
 export class SetupProfileDto {
   @IsString()
